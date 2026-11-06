@@ -72,18 +72,28 @@ const speciesList: SpeciesProfile[] = [
     label: "Eublepharis macularius · Gecko léopard",
     scientificName: "Eublepharis macularius",
     commonName: "Gecko léopard",
-    source: { title: "Leopard Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/leopard-gecko-care/", checkedAt: "2026-11-05" },
+    source: { title: "Leopard Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/leopard-gecko-care/", checkedAt: "2026-11-06" },
     minimumDimensions: { width: 92, depth: 46, height: 46 },
-    referenceRanges: null,
+    referenceRanges: {
+      hotSideTemperature: [32.2, 35],
+      coolSideTemperature: [22.2, 25],
+      baskingUvi: [2, 3],
+      coolSideHumidity: [30, 40],
+    },
     hidesAtBothEnds: null,
   },
   {
     label: "Correlophus ciliatus · Gecko à crête",
     scientificName: "Correlophus ciliatus",
     commonName: "Gecko à crête",
-    source: { title: "Crested Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko-care/", checkedAt: "2026-11-05" },
+    source: { title: "Crested Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko-care/", checkedAt: "2026-11-06" },
     minimumDimensions: { width: 46, depth: 46, height: 61 },
-    referenceRanges: null,
+    referenceRanges: {
+      hotSideTemperature: [23.9, 26.7],
+      coolSideTemperature: [21.1, 23.9],
+      baskingUvi: [1, 2],
+      coolSideHumidity: [60, 80],
+    },
     hidesAtBothEnds: null,
   },
   {
@@ -727,7 +737,7 @@ function App() {
                 <label><span>UVI · basking</span><input aria-label="Indice UVB UVI dans la zone de basking" type="number" min="0" step="0.1" value={measurements.baskingUvi ?? ""} onChange={(event) => updateMeasurement("baskingUvi", event.target.value)} /></label>
                 <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} /></label>
               </div>
-              <p className="measurement-note">Repères RSPCA pour un adulte; mesurez chaque zone séparément.</p>
+              <p className="measurement-note">Repères {selectedSpecies.source?.publisher}; températures en °C converties si nécessaire. Mesurez chaque zone séparément.</p>
             </div>}
           </section>
         </aside>
