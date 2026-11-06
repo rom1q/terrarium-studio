@@ -23,12 +23,17 @@ type Shape = "Basse" | "Cubique" | "Verticale";
 type Biotope = "Désertique" | "Tropical" | "Paludarium";
 type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche"; position: { x: number; z: number } };
 type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
+type Measurements = { hotSideTemperature: number | null; coolSideTemperature: number | null; baskingUvi: number | null; coolSideHumidity: number | null };
+type MeasurementKey = keyof Measurements;
+type ReferenceRanges = Partial<Record<MeasurementKey, readonly [number, number]>>;
+type CheckStatus = "met" | "insufficient" | "attention" | "unknown";
 type SpeciesProfile = {
   label: string;
   scientificName: string;
   commonName: string;
   source: SpeciesSource | null;
   minimumDimensions: { width: number; depth: number; height: number } | null;
+  referenceRanges: ReferenceRanges | null;
 };
 type StoredProject = {
   id: string;
@@ -39,6 +44,7 @@ type StoredProject = {
   species: string;
   decorations: Decoration[];
   nextId: number;
+  measurements?: Measurements;
 };
 
 const projectsStorageKey = "terrarium-studio-projects";
@@ -51,6 +57,12 @@ const speciesList: SpeciesProfile[] = [
     commonName: "Dragon barbu",
     source: { title: "Caring for your bearded dragon", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/beardeddragon", checkedAt: "2026-11-05" },
     minimumDimensions: { width: 120, depth: 60, height: 60 },
+    referenceRanges: {
+      hotSideTemperature: [38, 42],
+      coolSideTemperature: [22, 26],
+      baskingUvi: [3, 5],
+      coolSideHumidity: [30, 40],
+    },
   },
   {
     label: "Eublepharis macularius · Gecko léopard",
@@ -58,6 +70,7 @@ const speciesList: SpeciesProfile[] = [
     commonName: "Gecko léopard",
     source: { title: "Leopard Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/leopard-gecko-care/", checkedAt: "2026-11-05" },
     minimumDimensions: { width: 92, depth: 46, height: 46 },
+    referenceRanges: null,
   },
   {
     label: "Correlophus ciliatus · Gecko à crête",
@@ -65,6 +78,7 @@ const speciesList: SpeciesProfile[] = [
     commonName: "Gecko à crête",
     source: { title: "Crested Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko-care/", checkedAt: "2026-11-05" },
     minimumDimensions: { width: 46, depth: 46, height: 61 },
+    referenceRanges: null,
   },
   {
     label: "Dendrobates tinctorius · Dendrobate",
@@ -72,6 +86,7 @@ const speciesList: SpeciesProfile[] = [
     commonName: "Dendrobate",
     source: null,
     minimumDimensions: null,
+    referenceRanges: null,
   },
 ];
 
@@ -86,6 +101,13 @@ const createDefaultDecorations = (): Decoration[] => [
   { id: 2, kind: "Roche", position: { x: 0.22, z: 0.4 } },
   { id: 3, kind: "Cachette", position: { x: 0.18, z: -0.42 } },
 ];
+
+const createDefaultMeasurements = (): Measurements => ({
+  hotSideTemperature: null,
+  coolSideTemperature: null,
+  baskingUvi: null,
+  coolSideHumidity: null,
+});
 
 function isStoredProject(value: unknown): value is StoredProject {
   if (typeof value !== "object" || value === null) return false;
@@ -106,12 +128,20 @@ function isStoredProject(value: unknown): value is StoredProject {
       typeof (position as Record<string, unknown>).x === "number" &&
       typeof (position as Record<string, unknown>).z === "number";
   });
+  const measurements = project.measurements;
+  const isValidMeasurements = measurements === undefined || (
+    typeof measurements === "object" && measurements !== null &&
+    (["hotSideTemperature", "coolSideTemperature", "baskingUvi", "coolSideHumidity"] as const).every((key) => {
+      const measurement = (measurements as Record<string, unknown>)[key];
+      return measurement === null || (typeof measurement === "number" && Number.isFinite(measurement));
+    })
+  );
 
   return typeof project.id === "string" && typeof project.name === "string" &&
     ["Basse", "Cubique", "Verticale"].includes(project.shape as string) &&
     ["Désertique", "Tropical", "Paludarium"].includes(project.biotope as string) &&
     isValidDimensions && typeof project.species === "string" && speciesList.some((species) => species.label === project.species) &&
-    isValidDecorations && Number.isInteger(project.nextId);
+    isValidDecorations && isValidMeasurements && Number.isInteger(project.nextId);
 }
 
 function readCurrentProject(): StoredProject | null {
@@ -150,6 +180,7 @@ function App() {
   const [biotope, setBiotope] = useState<Biotope>(initialProject?.biotope ?? "Tropical");
   const [dimensions, setDimensions] = useState(initialProject?.dimensions ?? { width: 120, depth: 60, height: 80 });
   const [species, setSpecies] = useState(initialProject?.species ?? speciesList[0].label);
+  const [measurements, setMeasurements] = useState<Measurements>(initialProject?.measurements ?? createDefaultMeasurements());
   const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
   const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
   const [decorations, setDecorations] = useState<Decoration[]>(initialProject?.decorations ?? createDefaultDecorations());
@@ -462,6 +493,7 @@ function App() {
       species,
       decorations,
       nextId,
+      measurements,
     };
 
     try {
@@ -497,6 +529,7 @@ function App() {
     setSpecies(project.species);
     setDecorations(project.decorations);
     setNextId(project.nextId);
+    setMeasurements(project.measurements ?? createDefaultMeasurements());
     setSelectedDecorationId(null);
     setSaveFeedback("");
     localStorage.setItem(currentProjectStorageKey, JSON.stringify(project));
@@ -513,6 +546,7 @@ function App() {
     setSpecies(speciesList[0].label);
     setDecorations(createDefaultDecorations());
     setNextId(4);
+    setMeasurements(createDefaultMeasurements());
     setSelectedDecorationId(null);
     setViewMode("3d");
     setSaveFeedback("");
@@ -526,19 +560,42 @@ function App() {
     dimensions.width >= minimumDimensions.width &&
     dimensions.depth >= minimumDimensions.depth &&
     dimensions.height >= minimumDimensions.height;
-  const checks: { label: string; status: "met" | "insufficient" | "unknown"; detail: string }[] = [
+  const rangeCheck = (label: string, key: MeasurementKey, unit: string): { label: string; status: CheckStatus; detail: string } => {
+    const range = selectedSpecies.referenceRanges?.[key];
+    const value = measurements[key];
+    if (!range) return { label, status: "unknown", detail: "Non documenté" };
+    const rangeLabel = `${range[0]}–${range[1]} ${unit}`;
+    if (value === null) return { label, status: "unknown", detail: `À mesurer · repère ${rangeLabel}` };
+    const isInRange = value >= range[0] && value <= range[1];
+    return {
+      label,
+      status: isInRange ? "met" : "attention",
+      detail: `${value} ${unit} · ${isInRange ? "dans la plage" : "hors plage"} ${rangeLabel}`,
+    };
+  };
+  const checks: { label: string; status: CheckStatus; detail: string }[] = [
     {
       label: "Dimensions minimales",
       status: minimumDimensions === null ? "unknown" : dimensionsMeetMinimum ? "met" : "insufficient",
       detail: minimumDimensions === null ? "Non documenté" : `${dimensionsMeetMinimum ? "Respecté" : "Insuffisant"} · min. ${minimumDimensions.width} × ${minimumDimensions.depth} × ${minimumDimensions.height} cm`,
     },
-    { label: "Gradient thermique", status: "unknown", detail: "Non documenté" },
-    { label: "Humidité et ventilation", status: "unknown", detail: "Non documenté" },
+    rangeCheck("Zone chaude", "hotSideTemperature", "°C"),
+    rangeCheck("Zone fraîche", "coolSideTemperature", "°C"),
+    rangeCheck("UVI zone de basking", "baskingUvi", "UVI"),
+    rangeCheck("Humidité côté frais", "coolSideHumidity", "%"),
     { label: "Cachettes et enrichissement", status: "unknown", detail: "Non documenté" },
   ];
   const hasInsufficientCheck = checks.some((check) => check.status === "insufficient");
+  const hasAttentionCheck = checks.some((check) => check.status === "attention");
   const allChecksDocumented = checks.every((check) => check.status !== "unknown");
-  const overallStatus = hasInsufficientCheck ? "À corriger" : allChecksDocumented ? "Critères documentés" : "À documenter";
+  const overallStatus = hasInsufficientCheck ? "Dimensions insuffisantes" : hasAttentionCheck ? "Mesure à vérifier" : allChecksDocumented ? "Dans les repères consultés" : "À documenter";
+
+  const updateMeasurement = (key: MeasurementKey, value: string) => {
+    const numericValue = value === "" ? null : Number(value);
+    if (numericValue === null || Number.isFinite(numericValue)) {
+      setMeasurements((current) => ({ ...current, [key]: numericValue }));
+    }
+  };
 
   return (
     <main className="app-shell">
@@ -637,6 +694,16 @@ function App() {
               <ChevronDown size={15} />
             </label>
             <p className="species-note"><CircleHelp size={13} /> {selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
+            {selectedSpecies.referenceRanges && <div className="measurement-form">
+              <p className="field-label">Mesures relevées <small>optionnel</small></p>
+              <div className="measurement-grid">
+                <label><span>Zone chaude · °C</span><input aria-label="Température zone chaude en degrés" type="number" step="0.1" value={measurements.hotSideTemperature ?? ""} onChange={(event) => updateMeasurement("hotSideTemperature", event.target.value)} /></label>
+                <label><span>Zone fraîche · °C</span><input aria-label="Température zone fraîche en degrés" type="number" step="0.1" value={measurements.coolSideTemperature ?? ""} onChange={(event) => updateMeasurement("coolSideTemperature", event.target.value)} /></label>
+                <label><span>UVI · basking</span><input aria-label="Indice UVB UVI dans la zone de basking" type="number" min="0" step="0.1" value={measurements.baskingUvi ?? ""} onChange={(event) => updateMeasurement("baskingUvi", event.target.value)} /></label>
+                <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} /></label>
+              </div>
+              <p className="measurement-note">Repères RSPCA pour un adulte; mesurez chaque zone séparément.</p>
+            </div>}
           </section>
         </aside>
 
@@ -656,17 +723,17 @@ function App() {
 
         <aside className="panel right-panel">
           <div className="analysis-heading"><span className="analysis-icon"><ShieldCheck size={19} /></span><div><p className="eyebrow">BILAN DU PROJET</p><h2>Conformité</h2></div></div>
-          <div className={`status-block ${hasInsufficientCheck ? "insufficient" : ""}`}>
-            <div className="status-top"><span className="status-mark">{hasInsufficientCheck ? <AlertTriangle size={15} /> : <CircleHelp size={15} />}</span><span>{overallStatus}</span></div>
-            <p>{hasInsufficientCheck ? "Au moins une dimension est inférieure au minimum indiqué par la source. Vérifiez le guide complet avant toute décision." : "Ce bilan est partiel : les critères sans données sourcées restent inconnus et ne sont pas considérés comme conformes."}</p>
+          <div className={`status-block ${hasInsufficientCheck ? "insufficient" : hasAttentionCheck ? "attention" : ""}`}>
+            <div className="status-top"><span className="status-mark">{hasInsufficientCheck || hasAttentionCheck ? <AlertTriangle size={15} /> : <CircleHelp size={15} />}</span><span>{overallStatus}</span></div>
+            <p>{hasInsufficientCheck ? "Les dimensions sont inférieures au minimum indiqué par la source." : hasAttentionCheck ? "Au moins une mesure est hors de la plage de référence; vérifiez le matériel, le point de mesure et le guide complet." : "Ce bilan est partiel : les critères sans données sourcées restent inconnus et ne sont pas considérés comme conformes."}</p>
           </div>
           <div className="selected-species"><p className="field-label">ESPÈCE SÉLECTIONNÉE</p><strong>{selectedSpecies.commonName}</strong><span>{selectedSpecies.scientificName}</span></div>
           <div className="species-source"><p className="field-label">RÉFÉRENCE</p>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><small>Consultée le {selectedSpecies.source.checkedAt}</small></> : <span>Aucune référence vérifiée. Ces points restent inconnus.</span>}</div>
           <div className="checklist-heading"><span>Points à vérifier</span><span className="checklist-line" /></div>
           {checks.map((check) => <div className="check-row" key={check.label}><span className={`check-icon ${check.status}`}>{check.status === "met" ? <Check size={14} /> : check.status === "insufficient" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span><span>{check.label}</span><small>{check.detail}</small></div>)}
-          <div className="report-note"><AlertTriangle size={15} /><p>Le futur bilan devra citer ses sources et signaler les informations manquantes. Ce prototype ne valide pas encore un habitat.</p></div>
+          <div className="report-note"><AlertTriangle size={15} /><p>Les repères affichés sont partiels et ne certifient pas un habitat. Consultez la source complète et un vétérinaire spécialisé avant toute décision.</p></div>
           <div className="habitat-summary"><p className="field-label">RÉCAPITULATIF</p><div><span>Type</span><strong>{biotope}</strong></div><div><span>Volume</span><strong>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</strong></div><div><span>Décor</span><strong>{decorations.length} éléments</strong></div></div>
-          <button className="review-button" type="button" onClick={() => window.alert("Le rapport détaillé sera disponible après l'ajout de données d'élevage sourcées.")}>Voir le rapport <ChevronDown size={15} className="rotate-icon" /></button>
+          <button className="review-button" type="button" onClick={() => window.alert("Le bilan est consultable dans ce panneau. L’export du rapport avec l’historique des mesures n’est pas encore disponible.")}>Voir le rapport <ChevronDown size={15} className="rotate-icon" /></button>
         </aside>
       </section>
       <footer className="app-footer"><span>PROTOTYPE · CONFIGURATEUR D'HABITAT</span><span>Terrarium Studio <span className="footer-separator">/</span> v0.1</span></footer>

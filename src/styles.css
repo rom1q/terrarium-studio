@@ -101,6 +101,13 @@ h1, h2, p { margin-top: 0; }
 .species-select-wrap select { appearance: none; width: 100%; border: 1px solid #e2e7de; border-radius: 4px; padding: 10px 28px 10px 9px; color: #4a594d; background: #fff; font-size: 9px; }
 .species-select-wrap > svg { position: absolute; right: 9px; top: 10px; color: #8c988d; pointer-events: none; }
 .species-note { display: flex; align-items: flex-start; gap: 6px; font-size: 9px; color: #939c92; line-height: 1.5; margin: 9px 0 0; }.species-note svg { flex: 0 0 auto; margin-top: 1px; }
+.measurement-form { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
+.measurement-form > .field-label { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.measurement-form > .field-label small { color: #9aa39a; font-size: 8px; font-weight: 400; }
+.measurement-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.measurement-grid label { display: grid; gap: 4px; min-width: 0; color: #89948a; font-size: 8px; }
+.measurement-grid input { width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid #e6e9e1; border-radius: 4px; background: #fff; color: #354238; font-size: 11px; }
+.measurement-note { margin: 8px 0 0; color: #9aa39a; font-size: 8px; line-height: 1.4; }
 .stage-column { display: flex; flex-direction: column; min-width: 0; }
 .stage-toolbar { height: 43px; display: flex; align-items: flex-start; justify-content: space-between; }
 .view-tabs { display: inline-flex; gap: 4px; background: #e5e9df; padding: 3px; border-radius: 5px; }
@@ -130,6 +137,8 @@ h1, h2, p { margin-top: 0; }
 .status-block.insufficient { background: #fbefeb; border-color: #eed7cf; }
 .status-block.insufficient .status-top { color: #995840; }
 .status-block.insufficient p { color: #876b61; }
+.status-block.attention { background: #faf4e9; border-color: #f0e5cf; }
+.status-block.attention .status-top { color: #9c753d; }
 .status-mark { display: grid; place-items: center; }.status-block p { color: #887b66; font-size: 9px; line-height: 1.55; margin: 6px 0 0; }
 .selected-species { padding: 17px 0 15px; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
 .selected-species .field-label { font-size: 8px; color: #9aa39a; margin-bottom: 3px; }
@@ -142,7 +151,7 @@ h1, h2, p { margin-top: 0; }
 .checklist-heading { display: flex; align-items: center; gap: 9px; color: #58675c; font-size: 10px; font-weight: 600; padding: 16px 0 8px; }
 .checklist-line { height: 1px; flex: 1; background: #e8ebe4; }
 .check-row { min-height: 34px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f0f1ed; font-size: 9px; color: #68766b; }
-.check-icon { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; }.check-icon.unknown { color: #a9a995; background: #f2f1e9; }.check-icon.met { color: #557358; background: #edf3e8; }.check-icon.insufficient { color: #995840; background: #f7ebe5; }
+.check-icon { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; }.check-icon.unknown { color: #a9a995; background: #f2f1e9; }.check-icon.met { color: #557358; background: #edf3e8; }.check-icon.insufficient { color: #995840; background: #f7ebe5; }.check-icon.attention { color: #9c753d; background: #faf1df; }
 .check-row small { margin-left: auto; max-width: 46%; text-align: right; font-size: 8px; line-height: 1.35; color: #969d94; }
 .report-note { display: flex; gap: 8px; background: #f3f5ef; border-radius: 4px; padding: 10px; color: #849080; margin-top: 13px; }
 .report-note svg { flex: 0 0 auto; color: #86967e; }.report-note p { font-size: 8px; line-height: 1.55; margin: 0; }
