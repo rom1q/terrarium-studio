@@ -12,12 +12,14 @@ import {
   FileText,
   Leaf,
   Plus,
+  Pencil,
   Printer,
   RotateCcw,
   Ruler,
   ShieldCheck,
   Sprout,
   Sun,
+  Trash2,
   Upload,
   Waves,
   X,
@@ -204,6 +206,27 @@ function readSavedProjects(): StoredProject[] {
   }
 }
 
+function writeProjectCollection(projects: StoredProject[], currentProject?: StoredProject | null): boolean {
+  const previousProjects = localStorage.getItem(projectsStorageKey);
+  const previousCurrentProject = localStorage.getItem(currentProjectStorageKey);
+  try {
+    localStorage.setItem(projectsStorageKey, JSON.stringify(projects));
+    if (currentProject === null) localStorage.removeItem(currentProjectStorageKey);
+    else if (currentProject) localStorage.setItem(currentProjectStorageKey, JSON.stringify(currentProject));
+    return true;
+  } catch {
+    try {
+      if (previousProjects === null) localStorage.removeItem(projectsStorageKey);
+      else localStorage.setItem(projectsStorageKey, previousProjects);
+      if (previousCurrentProject === null) localStorage.removeItem(currentProjectStorageKey);
+      else localStorage.setItem(currentProjectStorageKey, previousCurrentProject);
+    } catch {
+      return false;
+    }
+    return false;
+  }
+}
+
 function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const projectMenuRef = useRef<HTMLDetailsElement>(null);
@@ -216,6 +239,8 @@ function App() {
   const [saveFeedback, setSaveFeedback] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(initialProject ? "saved" : "idle");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null);
+  const [projectDialogError, setProjectDialogError] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [draftProjectName, setDraftProjectName] = useState("");
   const [shape, setShape] = useState<Shape>(initialProject?.shape ?? "Basse");
@@ -553,6 +578,82 @@ function App() {
     if (selectedDecorationId === id) setSelectedDecorationId(null);
   };
 
+  const closeProjectNameDialog = () => {
+    setShowSaveDialog(false);
+    setRenamingProjectId(null);
+    setProjectDialogError("");
+  };
+
+  const openRenameProject = (project: StoredProject) => {
+    setRenamingProjectId(project.id);
+    setDraftProjectName(project.name);
+    setProjectDialogError("");
+    setShowSaveDialog(true);
+    projectMenuRef.current?.removeAttribute("open");
+  };
+
+  const renameSavedProject = (id: string, name: string) => {
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      setProjectDialogError("Le nom du projet ne peut pas être vide.");
+      return;
+    }
+    if (savedProjects.some((project) => project.id !== id && project.name.toLocaleLowerCase() === normalizedName.toLocaleLowerCase())) {
+      setProjectDialogError("Un projet porte déjà ce nom.");
+      return;
+    }
+    const existing = savedProjects.find((project) => project.id === id);
+    if (!existing) return;
+    const isCurrentProject = projectId === id;
+    const renamedProject: StoredProject = isCurrentProject
+      ? { id, name: normalizedName, shape, biotope, dimensions, species, decorations, nextId, measurements }
+      : { ...existing, name: normalizedName };
+    const projects = savedProjects.map((project) => project.id === id ? renamedProject : project);
+    if (!writeProjectCollection(projects, isCurrentProject ? renamedProject : undefined)) {
+      setProjectDialogError("Impossible d’enregistrer le nouveau nom sur cet appareil.");
+      return;
+    }
+
+    setSavedProjects(projects);
+    if (isCurrentProject) {
+      const serializedProject = JSON.stringify(renamedProject);
+      lastSavedProjectRef.current = serializedProject;
+      setProjectName(normalizedName);
+      setSaveStatus("saved");
+    }
+    closeProjectNameDialog();
+    setSaveFeedback("Projet renommé");
+    window.setTimeout(() => setSaveFeedback(""), 2200);
+  };
+
+  const deleteSavedProject = (project: StoredProject) => {
+    const isCurrentProject = projectId === project.id;
+    const message = isCurrentProject
+      ? `Supprimer la sauvegarde « ${project.name} » ? Le projet restera ouvert comme brouillon.`
+      : `Supprimer définitivement la sauvegarde « ${project.name} » ?`;
+    if (!window.confirm(message)) return;
+
+    const projects = savedProjects.filter((saved) => saved.id !== project.id);
+    if (!writeProjectCollection(projects, isCurrentProject ? null : undefined)) {
+      setSaveStatus("error");
+      setSaveFeedback("Impossible de supprimer la sauvegarde sur cet appareil");
+      return;
+    }
+
+    setSavedProjects(projects);
+    if (isCurrentProject) {
+      setProjectId(null);
+      lastSavedProjectRef.current = null;
+      setProjectName("Habitat sans titre");
+      setSaveStatus("idle");
+      setSaveFeedback("Sauvegarde supprimée; brouillon conservé");
+    } else {
+      setSaveFeedback("Projet supprimé");
+    }
+    window.setTimeout(() => setSaveFeedback(""), 2200);
+    projectMenuRef.current?.removeAttribute("open");
+  };
+
   const persistProject = (name: string) => {
     const normalizedName = name.trim() || "Habitat sans titre";
     const project: StoredProject = {
@@ -576,7 +677,7 @@ function App() {
       setProjectId(project.id);
       setProjectName(project.name);
       setSavedProjects(projects);
-      setShowSaveDialog(false);
+      closeProjectNameDialog();
       setSaveStatus("saved");
       setSaveFeedback("Projet enregistré");
       window.setTimeout(() => setSaveFeedback(""), 2200);
@@ -591,6 +692,8 @@ function App() {
       persistProject(projectName);
       return;
     }
+    setRenamingProjectId(null);
+    setProjectDialogError("");
     setDraftProjectName(projectName === "Habitat sans titre" ? "" : projectName);
     setShowSaveDialog(true);
   };
@@ -809,7 +912,13 @@ function App() {
             <button type="button" onClick={() => projectImportInputRef.current?.click()}><Upload size={14} /> Importer un JSON</button>
             <div className="project-list-label">Projets enregistrés</div>
             {savedProjects.length === 0 ? <p className="no-saved-projects">Aucun projet enregistré</p> : savedProjects.map((project) => (
-              <button type="button" className="saved-project-option" key={project.id} onClick={() => loadProject(project)}>{project.name}</button>
+              <div className="saved-project-row" key={project.id}>
+                <button type="button" className="saved-project-option" onClick={() => loadProject(project)}>{project.name}</button>
+                <div className="saved-project-actions">
+                  <button type="button" className="project-action" title={`Renommer ${project.name}`} aria-label={`Renommer ${project.name}`} onClick={() => openRenameProject(project)}><Pencil size={14} /></button>
+                  <button type="button" className="project-action delete-project-action" title={`Supprimer ${project.name}`} aria-label={`Supprimer ${project.name}`} onClick={() => deleteSavedProject(project)}><Trash2 size={14} /></button>
+                </div>
+              </div>
             ))}
           </div>
         </details>
@@ -938,14 +1047,15 @@ function App() {
       </section>
       <footer className="app-footer"><span>PROTOTYPE · CONFIGURATEUR D'HABITAT</span><span>Terrarium Studio <span className="footer-separator">/</span> v0.1</span></footer>
       {showSaveDialog && (
-        <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSaveDialog(false); }}>
-          <form className="project-save-dialog" role="dialog" aria-modal="true" aria-labelledby="save-project-title" onSubmit={(event) => { event.preventDefault(); persistProject(draftProjectName); }}>
-            <p className="eyebrow">NOUVEAU PROJET</p>
-            <h2 id="save-project-title">Enregistrer le projet</h2>
-            <label className="project-name-field"><span>Nom du projet</span><input autoFocus maxLength={60} required value={draftProjectName} onChange={(event) => setDraftProjectName(event.target.value)} /></label>
+        <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProjectNameDialog(); }}>
+          <form className="project-save-dialog" role="dialog" aria-modal="true" aria-labelledby="save-project-title" onSubmit={(event) => { event.preventDefault(); if (renamingProjectId) renameSavedProject(renamingProjectId, draftProjectName); else persistProject(draftProjectName); }}>
+            <p className="eyebrow">{renamingProjectId ? "GESTION DES PROJETS" : "NOUVEAU PROJET"}</p>
+            <h2 id="save-project-title">{renamingProjectId ? "Renommer le projet" : "Enregistrer le projet"}</h2>
+            <label className="project-name-field"><span>Nom du projet</span><input autoFocus maxLength={60} required value={draftProjectName} onChange={(event) => { setDraftProjectName(event.target.value); setProjectDialogError(""); }} /></label>
+            {projectDialogError && <p className="project-dialog-error" role="alert">{projectDialogError}</p>}
             <div className="dialog-actions">
-              <button type="button" className="cancel-button" onClick={() => setShowSaveDialog(false)}>Annuler</button>
-              <button type="submit" className="save-button">Enregistrer</button>
+              <button type="button" className="cancel-button" onClick={closeProjectNameDialog}>Annuler</button>
+              <button type="submit" className="save-button">{renamingProjectId ? "Renommer" : "Enregistrer"}</button>
             </div>
           </form>
         </div>

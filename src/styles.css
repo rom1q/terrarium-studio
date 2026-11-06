@@ -34,6 +34,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .project-dropdown { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: min(270px, calc(100vw - 24px)); max-height: min(320px, 70vh); overflow: auto; padding: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 5px; box-shadow: 0 12px 30px #29372f1c; }
 .project-dropdown button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 3px; padding: 9px 10px; text-align: left; background: transparent; color: var(--ink); font-size: 11px; cursor: pointer; }
 .project-dropdown button:hover { background: var(--soft-green); }
+.saved-project-row { display: flex; align-items: center; gap: 2px; }
+.project-dropdown .saved-project-option { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-project-actions { display: flex; flex: 0 0 auto; gap: 1px; }
+.project-dropdown .project-action { flex: 0 0 30px; justify-content: center; width: 30px; padding: 7px; color: #78847b; }
+.project-dropdown .delete-project-action:hover { color: #995840; background: #fbefeb; }
 .project-list-label { padding: 9px 10px 5px; color: #929b91; font-size: 8px; font-weight: 700; }
 .no-saved-projects { margin: 0; padding: 6px 10px 9px; color: var(--muted); font-size: 10px; }
 .live-dot { width: 7px; height: 7px; display: inline-block; border-radius: 50%; background: #80a878; box-shadow: 0 0 0 3px #e9f0e5; }
@@ -166,6 +171,7 @@ h1, h2, p { margin-top: 0; }
 .project-save-dialog h2 { margin: 0 0 18px; font: 600 18px var(--display); }
 .project-name-field { display: grid; gap: 6px; color: #66746a; font-size: 10px; font-weight: 600; }
 .project-name-field input { width: 100%; border: 1px solid #e1e6dc; border-radius: 4px; padding: 10px; color: var(--ink); background: white; }
+.project-dialog-error { margin: 8px 0 0; color: #995840; font-size: 9px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .cancel-button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 4px; background: transparent; font-size: 10px; cursor: pointer; }
 .report-backdrop { z-index: 40; }
