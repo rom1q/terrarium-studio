@@ -27,6 +27,7 @@ import {
 import {
   calculateProjectChecks,
   isStoredProject,
+  measureDecorationPlacement,
   parseProjectExport,
   PROJECT_EXPORT_FORMAT,
   removeSavedProjectRecord,
@@ -787,6 +788,10 @@ function App() {
     attention: "À vérifier",
     unknown: "Non documenté",
   };
+  const positionedDecorations = measureDecorationPlacement(decorations, dimensions);
+  const decorationCounts = (["Plante", "Cachette", "Roche"] as const)
+    .map((kind) => ({ kind, count: decorations.filter((item) => item.kind === kind).length }))
+    .filter((item) => item.count > 0);
 
   const updateMeasurement = (key: MeasurementKey, value: string) => {
     const numericValue = value === "" ? null : Number(value);
@@ -880,10 +885,10 @@ function App() {
               <button type="button" onClick={() => addDecoration("Roche")}><Plus size={14} /><span className="rock-icon" /> Roche</button>
             </div>
             <div className="decor-list">
-              {decorations.map((item, index) => (
+              {positionedDecorations.map((item, index) => (
                 <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
                   <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={14} /> : item.kind === "Cachette" ? <Expand size={14} /> : <span className="rock-icon" />}</span>
-                  <span className="decor-label" onClick={() => setSelectedDecorationId(item.id)}><span>{item.kind} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">X {Math.round((item.position.x + 1) * dimensions.width / 2)} cm · Z {Math.round((item.position.z + 1) * dimensions.depth / 2)} cm · centre → paroi {Math.round(Math.min((item.position.x + 1) * dimensions.width / 2, (1 - item.position.x) * dimensions.width / 2, (item.position.z + 1) * dimensions.depth / 2, (1 - item.position.z) * dimensions.depth / 2))} cm</small></span>
+                  <span className="decor-label" onClick={() => setSelectedDecorationId(item.id)}><span>{item.kind} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">X {item.xCm} cm · Z {item.zCm} cm · paroi {item.nearestWallCm} cm</small></span>
                   <button type="button" className="remove-button" title={`Retirer ${item.kind}`} aria-label={`Retirer ${item.kind}`} onClick={() => removeDecoration(item.id)}><X size={14} /></button>
                 </div>
               ))}
@@ -980,6 +985,19 @@ function App() {
               <div><dt>Volume estimé</dt><dd>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</dd></div>
               <div><dt>Statut du bilan</dt><dd>{overallStatus}</dd></div>
             </dl>
+            <section className="report-plan-section">
+              <h3>Plan coté</h3>
+              <div className="report-plan-dimensions"><span>Largeur intérieure <strong>{dimensions.width} cm</strong></span><span>Profondeur intérieure <strong>{dimensions.depth} cm</strong></span></div>
+              <div className="report-plan-frame" role="img" aria-label={`Plan du terrarium de ${dimensions.width} par ${dimensions.depth} centimètres avec le décor placé`} style={{ aspectRatio: `${Math.max(1, dimensions.width)} / ${Math.max(1, dimensions.depth)}`, backgroundSize: `${Math.min(100, 1000 / Math.max(10, dimensions.width))}% ${Math.min(100, 1000 / Math.max(10, dimensions.depth))}%` }}>
+                {positionedDecorations.map((item) => <span key={item.id} className={`report-plan-marker marker-${item.kind.toLowerCase()}`} style={{ left: `${Math.min(97, Math.max(3, (item.position.x + 1) * 50))}%`, top: `${Math.min(97, Math.max(3, (item.position.z + 1) * 50))}%` }} title={`${item.kind} · X ${item.xCm} cm · Z ${item.zCm} cm`} aria-label={`${item.kind}, X ${item.xCm} cm, Z ${item.zCm} cm`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={12} /> : <span className="rock-icon" />}</span>)}
+              </div>
+              <div className="report-plan-legend"><span><i className="legend-dot plant-dot" /> Plante</span><span><i className="legend-dot hide-dot" /> Cachette</span><span><i className="legend-dot rock-dot" /> Roche</span></div>
+              <h4>Décor à prévoir</h4>
+              {decorationCounts.length === 0 ? <p className="report-no-decor">Aucun élément de décor placé.</p> : <>
+                <div className="report-material-counts">{decorationCounts.map((item) => <span key={item.kind}>{item.kind} <strong>× {item.count}</strong></span>)}</div>
+                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={13} /> : <span className="rock-icon" />}</span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")}</strong><small>X {item.xCm} cm depuis la gauche · Z {item.zCm} cm depuis le haut · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
+              </>}
+            </section>
             <h3>Critères et relevés</h3>
             <div className="report-checks">
               {checks.map((check) => <div className="report-check" key={check.label}>

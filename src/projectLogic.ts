@@ -2,6 +2,7 @@ export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
 export type LifeStage = "juvenile" | "adult";
 export type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche"; position: { x: number; z: number } };
+export type PositionedDecoration = Decoration & { xCm: number; zCm: number; nearestWallCm: number };
 export type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
 export type Measurements = { hotSideTemperature: number | null; coolSideTemperature: number | null; baskingUvi: number | null; coolSideHumidity: number | null };
 export type MeasurementKey = keyof Measurements;
@@ -47,6 +48,22 @@ export type ProjectCheckInput = {
 };
 
 export const PROJECT_EXPORT_FORMAT = "terrarium-studio-project";
+
+export function measureDecorationPlacement(
+  decorations: Decoration[],
+  dimensions: { width: number; depth: number },
+): PositionedDecoration[] {
+  return decorations.map((item) => {
+    const x = (item.position.x + 1) * dimensions.width / 2;
+    const z = (item.position.z + 1) * dimensions.depth / 2;
+    return {
+      ...item,
+      xCm: Math.round(x),
+      zCm: Math.round(z),
+      nearestWallCm: Math.round(Math.min(x, dimensions.width - x, z, dimensions.depth - z)),
+    };
+  });
+}
 
 export function isStoredProject(value: unknown, allowedSpecies: readonly string[]): value is StoredProject {
   if (typeof value !== "object" || value === null) return false;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateProjectChecks,
   isStoredProject,
+  measureDecorationPlacement,
   parseProjectExport,
   PROJECT_EXPORT_FORMAT,
   removeSavedProjectRecord,
@@ -163,6 +164,15 @@ describe("project checks", () => {
 
     expect(result.checks.every((check) => check.status === "unknown")).toBe(true);
     expect(result.overallStatus).toBe("À documenter");
+  });
+});
+
+describe("dimensioned plan placement", () => {
+  it("converts normalized positions to centimetres and nearest-wall distance", () => {
+    expect(measureDecorationPlacement(project.decorations, { width: 120, depth: 60 })).toEqual([
+      { ...project.decorations[0], xCm: 30, zCm: 30, nearestWallCm: 30 },
+      { ...project.decorations[1], xCm: 90, zCm: 30, nearestWallCm: 30 },
+    ]);
   });
 });
 

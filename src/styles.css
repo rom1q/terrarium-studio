@@ -193,6 +193,27 @@ h1, h2, p { margin-top: 0; }
 .report-facts dt { color: #929b91; font-size: 8px; font-weight: 700; }
 .report-facts dd { margin: 0; color: #46564a; font-size: 11px; font-weight: 600; }
 .project-report h3 { margin: 18px 0 8px; color: #58675c; font: 600 12px var(--display); }
+.report-plan-section { margin: 18px 0; padding: 14px; border: 1px solid var(--line); border-radius: 5px; }
+.project-report .report-plan-section h3 { margin: 0 0 9px; }
+.report-plan-dimensions { display: flex; justify-content: space-between; gap: 12px; max-width: 520px; margin: 0 auto 6px; color: #77837a; font-size: 8px; }
+.report-plan-dimensions strong { color: #46564a; font-size: 9px; }
+.report-plan-frame { position: relative; width: min(520px, 100%); margin: 0 auto; overflow: hidden; border: 1px solid #718473; background-color: #f7f8f2; background-image: linear-gradient(to right, #dce3d8 1px, transparent 1px), linear-gradient(to bottom, #dce3d8 1px, transparent 1px); }
+.report-plan-marker { position: absolute; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%); border: 1px solid #fff; border-radius: 50%; box-shadow: 0 1px 3px #29372f35; }
+.report-plan-marker.marker-plante { background: #e7f0e2; color: #557358; }.report-plan-marker.marker-cachette { background: #f1e8db; color: #806b4e; }.report-plan-marker.marker-roche { background: #e7e7e1; color: #696b61; }
+.report-plan-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 8px 0 14px; color: #758076; font-size: 8px; }
+.report-plan-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.report-plan-legend .legend-dot { width: 8px; height: 8px; }
+.report-plan-legend .plant-dot { background: #6a8a62; }.report-plan-legend .hide-dot { background: #927d61; }.report-plan-legend .rock-dot { background: #9a998f; }
+.project-report .report-plan-section h4 { margin: 0 0 7px; color: #58675c; font: 600 10px var(--display); }
+.report-material-counts { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 7px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: #748075; font-size: 9px; }
+.report-material-counts strong { color: #46564a; }
+.report-material-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.report-material-list li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 0; border-bottom: 1px solid #f0f1ed; }
+.report-material-list .decor-swatch { flex: 0 0 22px; }
+.report-material-list li > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.report-material-list strong { color: #56655a; font-size: 9px; }
+.report-material-list small { color: #89948a; font-size: 8px; line-height: 1.4; overflow-wrap: anywhere; }
+.report-no-decor { margin: 0; color: #89948a; font-size: 9px; }
 .report-checks { border-top: 1px solid var(--line); }
 .report-check { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 7px 9px; padding: 9px 0; border-bottom: 1px solid #f0f1ed; }
 .report-check > strong { color: #58675c; font-size: 10px; }
@@ -236,6 +257,7 @@ h1, h2, p { margin-top: 0; }
   .selected-species { border-bottom: 1px solid var(--line); padding: 15px 0; }.checklist-heading { padding-top: 14px; }.check-row { min-height: 34px; }.habitat-summary { padding-top: 16px; }.review-button { margin-top: 3px; }
   .app-footer { padding: 2px 12px 10px; }
   .project-report { padding: 18px; }
+  .report-plan-section { padding: 10px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .panel { animation: settle-in 360ms ease-out both; }
@@ -250,6 +272,7 @@ h1, h2, p { margin-top: 0; }
   .report-backdrop { position: static; inset: auto; display: block; min-height: 0; padding: 0; background: #fff; }
   .project-report { width: 100%; max-width: none; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: #fff; }
   .report-close, .report-actions { display: none !important; }
+  .report-plan-section, .report-material-list li { break-inside: avoid; }
   .report-reference a::after { content: " (" attr(href) ")"; font-size: 8px; overflow-wrap: anywhere; }
   .report-check { break-inside: avoid; }
 }
