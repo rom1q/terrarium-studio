@@ -42,6 +42,7 @@ function App() {
   const [biotope, setBiotope] = useState<Biotope>("Tropical");
   const [dimensions, setDimensions] = useState({ width: 120, depth: 60, height: 80 });
   const [species, setSpecies] = useState(speciesList[0]);
+  const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
   const [decorations, setDecorations] = useState<Decoration[]>([
     { id: 1, kind: "Plante" },
     { id: 2, kind: "Roche" },
@@ -56,7 +57,12 @@ function App() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#e9ede4");
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
-    camera.position.set(4.8, 3.8, 5.7);
+    if (viewMode === "plan") {
+      camera.up.set(0, 0, -1);
+      camera.position.set(0, 8.5, 0);
+    } else {
+      camera.position.set(4.8, 3.8, 5.7);
+    }
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -76,10 +82,11 @@ function App() {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.07;
-    controls.target.set(0, 0.9, 0);
+    controls.target.set(0, viewMode === "plan" ? 0.22 : 0.9, 0);
     controls.minDistance = 3.2;
     controls.maxDistance = 11;
     controls.maxPolarAngle = Math.PI * 0.48;
+    controls.enableRotate = viewMode !== "plan";
 
     const width = Math.min(3.2, Math.max(1.7, dimensions.width / 58));
     const depth = Math.min(2.5, Math.max(1.25, dimensions.depth / 38));
@@ -232,7 +239,7 @@ function App() {
         }
       });
     };
-  }, [shape, dimensions, biotope, decorations]);
+  }, [shape, dimensions, biotope, decorations, viewMode]);
 
   const updateDimension = (key: keyof typeof dimensions, value: string) => {
     const numericValue = Number(value);
@@ -342,12 +349,12 @@ function App() {
 
         <section className="stage-column" aria-label="Visualisation 3D">
           <div className="stage-toolbar">
-            <div className="view-tabs"><button className="active" type="button"><Eye size={14} /> Vue 3D</button><button type="button" title="La vue en plan sera ajoutée ensuite">Plan</button></div>
+            <div className="view-tabs"><button className={viewMode === "3d" ? "active" : ""} type="button" aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}><Eye size={14} /> Vue 3D</button><button className={viewMode === "plan" ? "active" : ""} type="button" aria-pressed={viewMode === "plan"} onClick={() => setViewMode("plan")}><Ruler size={14} /> Plan</button></div>
             <span className="stage-dimensions">{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</span>
           </div>
           <div className="viewport-wrap">
             <div className="viewport" ref={viewportRef} />
-            <div className="viewport-label"><span className="live-dot" /> APERÇU EN DIRECT</div>
+            <div className="viewport-label"><span className="live-dot" /> {viewMode === "plan" ? "VUE EN PLAN" : "APERÇU EN DIRECT"}</div>
             <div className="viewport-tools"><button type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={16} /></button></div>
             <div className="viewport-caption"><span className="caption-index">FIG. 01</span><span>{biotope} <b>·</b> {shape.toLowerCase()}</span></div>
           </div>
