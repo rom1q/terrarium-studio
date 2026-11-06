@@ -34,6 +34,7 @@ type SpeciesProfile = {
   source: SpeciesSource | null;
   minimumDimensions: { width: number; depth: number; height: number } | null;
   referenceRanges: ReferenceRanges | null;
+  hidesAtBothEnds: boolean | null;
 };
 type StoredProject = {
   id: string;
@@ -63,6 +64,7 @@ const speciesList: SpeciesProfile[] = [
       baskingUvi: [3, 5],
       coolSideHumidity: [30, 40],
     },
+    hidesAtBothEnds: true,
   },
   {
     label: "Eublepharis macularius · Gecko léopard",
@@ -71,6 +73,7 @@ const speciesList: SpeciesProfile[] = [
     source: { title: "Leopard Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/leopard-gecko-care/", checkedAt: "2026-11-05" },
     minimumDimensions: { width: 92, depth: 46, height: 46 },
     referenceRanges: null,
+    hidesAtBothEnds: null,
   },
   {
     label: "Correlophus ciliatus · Gecko à crête",
@@ -79,6 +82,7 @@ const speciesList: SpeciesProfile[] = [
     source: { title: "Crested Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko-care/", checkedAt: "2026-11-05" },
     minimumDimensions: { width: 46, depth: 46, height: 61 },
     referenceRanges: null,
+    hidesAtBothEnds: null,
   },
   {
     label: "Dendrobates tinctorius · Dendrobate",
@@ -87,6 +91,7 @@ const speciesList: SpeciesProfile[] = [
     source: null,
     minimumDimensions: null,
     referenceRanges: null,
+    hidesAtBothEnds: null,
   },
 ];
 
@@ -99,7 +104,7 @@ const biotopeColors: Record<Biotope, { ground: number; plant: number; water: num
 const createDefaultDecorations = (): Decoration[] => [
   { id: 1, kind: "Plante", position: { x: -0.62, z: -0.42 } },
   { id: 2, kind: "Roche", position: { x: 0.22, z: 0.4 } },
-  { id: 3, kind: "Cachette", position: { x: 0.18, z: -0.42 } },
+  { id: 3, kind: "Cachette", position: { x: 0.62, z: -0.42 } },
 ];
 
 const createDefaultMeasurements = (): Measurements => ({
@@ -560,6 +565,16 @@ function App() {
     dimensions.width >= minimumDimensions.width &&
     dimensions.depth >= minimumDimensions.depth &&
     dimensions.height >= minimumDimensions.height;
+  const hasHideAtLeftEnd = decorations.some((item) => item.kind === "Cachette" && item.position.x <= -0.5);
+  const hasHideAtRightEnd = decorations.some((item) => item.kind === "Cachette" && item.position.x >= 0.5);
+  const hideEndCount = Number(hasHideAtLeftEnd) + Number(hasHideAtRightEnd);
+  const hidingCheck: { label: string; status: CheckStatus; detail: string } = selectedSpecies.hidesAtBothEnds === null
+    ? { label: "Cachettes aux deux extrémités", status: "unknown", detail: "Non documenté" }
+    : {
+      label: "Cachettes aux deux extrémités",
+      status: hideEndCount === 2 ? "met" : "insufficient",
+      detail: hideEndCount === 2 ? "2/2 extrémités couvertes" : `${hideEndCount}/2 extrémités · cachette manquante dans le quart ${hasHideAtLeftEnd ? "droit" : "gauche"}`,
+    };
   const rangeCheck = (label: string, key: MeasurementKey, unit: string): { label: string; status: CheckStatus; detail: string } => {
     const range = selectedSpecies.referenceRanges?.[key];
     const value = measurements[key];
@@ -583,12 +598,13 @@ function App() {
     rangeCheck("Zone fraîche", "coolSideTemperature", "°C"),
     rangeCheck("UVI zone de basking", "baskingUvi", "UVI"),
     rangeCheck("Humidité côté frais", "coolSideHumidity", "%"),
-    { label: "Cachettes et enrichissement", status: "unknown", detail: "Non documenté" },
+    hidingCheck,
+    { label: "Autre enrichissement", status: "unknown", detail: "Non documenté" },
   ];
   const hasInsufficientCheck = checks.some((check) => check.status === "insufficient");
   const hasAttentionCheck = checks.some((check) => check.status === "attention");
   const allChecksDocumented = checks.every((check) => check.status !== "unknown");
-  const overallStatus = hasInsufficientCheck ? "Dimensions insuffisantes" : hasAttentionCheck ? "Mesure à vérifier" : allChecksDocumented ? "Dans les repères consultés" : "À documenter";
+  const overallStatus = hasInsufficientCheck ? "Repères à compléter" : hasAttentionCheck ? "Mesure à vérifier" : allChecksDocumented ? "Dans les repères consultés" : "À documenter";
 
   const updateMeasurement = (key: MeasurementKey, value: string) => {
     const numericValue = value === "" ? null : Number(value);
@@ -725,7 +741,7 @@ function App() {
           <div className="analysis-heading"><span className="analysis-icon"><ShieldCheck size={19} /></span><div><p className="eyebrow">BILAN DU PROJET</p><h2>Conformité</h2></div></div>
           <div className={`status-block ${hasInsufficientCheck ? "insufficient" : hasAttentionCheck ? "attention" : ""}`}>
             <div className="status-top"><span className="status-mark">{hasInsufficientCheck || hasAttentionCheck ? <AlertTriangle size={15} /> : <CircleHelp size={15} />}</span><span>{overallStatus}</span></div>
-            <p>{hasInsufficientCheck ? "Les dimensions sont inférieures au minimum indiqué par la source." : hasAttentionCheck ? "Au moins une mesure est hors de la plage de référence; vérifiez le matériel, le point de mesure et le guide complet." : "Ce bilan est partiel : les critères sans données sourcées restent inconnus et ne sont pas considérés comme conformes."}</p>
+            <p>{hasInsufficientCheck ? "Au moins un repère de la source n’est pas atteint. Consultez le détail ci-dessous." : hasAttentionCheck ? "Au moins une mesure est hors de la plage de référence; vérifiez le matériel, le point de mesure et le guide complet." : "Ce bilan est partiel : les critères sans données sourcées restent inconnus et ne sont pas considérés comme conformes."}</p>
           </div>
           <div className="selected-species"><p className="field-label">ESPÈCE SÉLECTIONNÉE</p><strong>{selectedSpecies.commonName}</strong><span>{selectedSpecies.scientificName}</span></div>
           <div className="species-source"><p className="field-label">RÉFÉRENCE</p>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><small>Consultée le {selectedSpecies.source.checkedAt}</small></> : <span>Aucune référence vérifiée. Ces points restent inconnus.</span>}</div>
