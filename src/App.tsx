@@ -36,6 +36,7 @@ import {
   type Decoration,
   type MeasurementKey,
   type Measurements,
+  type LifeStage,
   type ProjectExport,
   type Shape,
   type SpeciesProfile,
@@ -184,6 +185,7 @@ function App() {
   const [biotope, setBiotope] = useState<Biotope>(initialProject?.biotope ?? "Tropical");
   const [dimensions, setDimensions] = useState(initialProject?.dimensions ?? { width: 120, depth: 60, height: 80 });
   const [species, setSpecies] = useState(initialProject?.species ?? speciesList[0].label);
+  const [lifeStage, setLifeStage] = useState<LifeStage>(initialProject?.lifeStage ?? "adult");
   const [measurements, setMeasurements] = useState<Measurements>(initialProject?.measurements ?? createDefaultMeasurements());
   const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
   const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
@@ -196,7 +198,7 @@ function App() {
       return;
     }
 
-    const project: StoredProject = { id: projectId, name: projectName, shape, biotope, dimensions, species, decorations, nextId, measurements };
+    const project: StoredProject = { id: projectId, name: projectName, shape, biotope, dimensions, species, lifeStage, decorations, nextId, measurements };
     const serializedProject = JSON.stringify(project);
     if (serializedProject === lastSavedProjectRef.current) return;
 
@@ -217,7 +219,7 @@ function App() {
     }, 600);
 
     return () => window.clearTimeout(timeout);
-  }, [projectId, projectName, shape, biotope, dimensions, species, decorations, nextId, measurements]);
+  }, [projectId, projectName, shape, biotope, dimensions, species, lifeStage, decorations, nextId, measurements]);
 
   useEffect(() => {
     const host = viewportRef.current;
@@ -538,7 +540,7 @@ function App() {
     const { project: renamedProject, projects } = result;
     const isCurrentProject = projectId === id;
     const currentProject = isCurrentProject
-      ? { ...renamedProject, shape, biotope, dimensions, species, decorations, nextId, measurements }
+      ? { ...renamedProject, shape, biotope, dimensions, species, lifeStage, decorations, nextId, measurements }
       : renamedProject;
     if (!writeProjectCollection(projects, isCurrentProject ? currentProject : undefined)) {
       setProjectDialogError("Impossible d’enregistrer le nouveau nom sur cet appareil.");
@@ -594,6 +596,7 @@ function App() {
       biotope,
       dimensions,
       species,
+      lifeStage,
       decorations,
       nextId,
       measurements,
@@ -637,6 +640,7 @@ function App() {
       biotope,
       dimensions,
       species,
+      lifeStage,
       decorations,
       nextId,
       measurements,
@@ -685,6 +689,7 @@ function App() {
       id: globalThis.crypto.randomUUID(),
       name: importedName,
       dimensions: { ...importedProject.dimensions },
+      lifeStage: importedProject.lifeStage ?? "adult",
       decorations: importedProject.decorations.map((item) => ({ ...item, position: { ...item.position } })),
       measurements: importedProject.measurements ?? createDefaultMeasurements(),
     };
@@ -718,6 +723,7 @@ function App() {
     setBiotope(project.biotope);
     setDimensions(project.dimensions);
     setSpecies(project.species);
+    setLifeStage(project.lifeStage ?? "adult");
     setDecorations(project.decorations);
     setNextId(project.nextId);
     setMeasurements(project.measurements ?? createDefaultMeasurements());
@@ -738,6 +744,7 @@ function App() {
     setBiotope(project.biotope);
     setDimensions(project.dimensions);
     setSpecies(project.species);
+    setLifeStage(project.lifeStage ?? "adult");
     setDecorations(project.decorations);
     setNextId(project.nextId);
     setMeasurements(project.measurements ?? createDefaultMeasurements());
@@ -757,6 +764,7 @@ function App() {
     setBiotope("Tropical");
     setDimensions({ width: 120, depth: 60, height: 80 });
     setSpecies(speciesList[0].label);
+    setLifeStage("adult");
     setDecorations(createDefaultDecorations());
     setNextId(4);
     setMeasurements(createDefaultMeasurements());
@@ -769,7 +777,7 @@ function App() {
   };
 
   const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
-  const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, decorations, measurements });
+  const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, decorations, measurements, lifeStage });
   const checkStatusLabels: Record<CheckStatus, string> = {
     met: "Repère atteint",
     insufficient: "À compléter",
@@ -889,7 +897,14 @@ function App() {
               </select>
               <ChevronDown size={15} />
             </label>
-            <p className="species-note"><CircleHelp size={13} /> {selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
+            <div className="life-stage-control" role="group" aria-label="Stade de vie">
+              <span>Stade de vie</span>
+              <div className="life-stage-options">
+                <button type="button" className={lifeStage === "juvenile" ? "active" : ""} aria-pressed={lifeStage === "juvenile"} onClick={() => setLifeStage("juvenile")}>Juvénile</button>
+                <button type="button" className={lifeStage === "adult" ? "active" : ""} aria-pressed={lifeStage === "adult"} onClick={() => setLifeStage("adult")}>Adulte</button>
+              </div>
+            </div>
+            <p className="species-note"><CircleHelp size={13} /> {lifeStage === "juvenile" ? "Aucun profil juvénile vérifié; les seuils adultes ne sont pas appliqués." : selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
             {selectedSpecies.referenceRanges && <div className="measurement-form">
               <p className="field-label">Mesures relevées <small>optionnel</small></p>
               <div className="measurement-grid">
@@ -898,7 +913,7 @@ function App() {
                 <label><span>UVI · basking</span><input aria-label="Indice UVB UVI dans la zone de basking" type="number" min="0" step="0.1" value={measurements.baskingUvi ?? ""} onChange={(event) => updateMeasurement("baskingUvi", event.target.value)} /></label>
                 <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} /></label>
               </div>
-              <p className="measurement-note">Repères {selectedSpecies.source?.publisher}; températures en °C converties si nécessaire. Mesurez chaque zone séparément.</p>
+              <p className="measurement-note">{lifeStage === "adult" ? `Repères ${selectedSpecies.source?.publisher} pour adulte; températures en °C converties si nécessaire.` : "Relevés conservés, mais aucune plage juvénile vérifiée ne permet de les comparer."} Mesurez chaque zone séparément.</p>
             </div>}
           </section>
         </aside>
@@ -951,12 +966,13 @@ function App() {
         <div className="dialog-backdrop report-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowReport(false); }}>
           <section className="project-report" role="dialog" aria-modal="true" aria-labelledby="report-title">
             <header className="report-header">
-              <div><p className="eyebrow">RAPPORT D'HABITAT · {new Date().toLocaleDateString("fr-FR")}</p><h2 id="report-title">{projectName}</h2><p>{selectedSpecies.commonName} · <i>{selectedSpecies.scientificName}</i></p></div>
+              <div><p className="eyebrow">RAPPORT D'HABITAT · {new Date().toLocaleDateString("fr-FR")}</p><h2 id="report-title">{projectName}</h2><p>{selectedSpecies.commonName} · {lifeStage === "adult" ? "Adulte" : "Juvénile"} · <i>{selectedSpecies.scientificName}</i></p></div>
               <button type="button" className="report-close" aria-label="Fermer le rapport" autoFocus onClick={() => setShowReport(false)}><X size={17} /></button>
             </header>
             <dl className="report-facts">
               <div><dt>Dimensions intérieures</dt><dd>{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</dd></div>
               <div><dt>Biotope et format</dt><dd>{biotope} · {shape.toLowerCase()}</dd></div>
+              <div><dt>Stade de vie</dt><dd>{lifeStage === "adult" ? "Adulte" : "Juvénile"}</dd></div>
               <div><dt>Volume estimé</dt><dd>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</dd></div>
               <div><dt>Statut du bilan</dt><dd>{overallStatus}</dd></div>
             </dl>

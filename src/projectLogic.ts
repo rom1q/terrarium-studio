@@ -1,5 +1,6 @@
 export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
+export type LifeStage = "juvenile" | "adult";
 export type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche"; position: { x: number; z: number } };
 export type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
 export type Measurements = { hotSideTemperature: number | null; coolSideTemperature: number | null; baskingUvi: number | null; coolSideHumidity: number | null };
@@ -24,6 +25,7 @@ export type StoredProject = {
   species: string;
   decorations: Decoration[];
   nextId: number;
+  lifeStage?: LifeStage;
   measurements?: Measurements;
 };
 export type ProjectExport = { format: "terrarium-studio-project"; version: 1; exportedAt: string; project: StoredProject };
@@ -40,6 +42,7 @@ export type ProjectCheckInput = {
   dimensions: { width: number; depth: number; height: number };
   decorations: Decoration[];
   measurements: Measurements;
+  lifeStage?: LifeStage;
 };
 
 export const PROJECT_EXPORT_FORMAT = "terrarium-studio-project";
@@ -64,6 +67,7 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
       typeof (position as Record<string, unknown>).z === "number";
   });
   const measurements = project.measurements;
+  const isValidLifeStage = project.lifeStage === undefined || project.lifeStage === "juvenile" || project.lifeStage === "adult";
   const isValidMeasurements = measurements === undefined || (
     typeof measurements === "object" && measurements !== null &&
     (["hotSideTemperature", "coolSideTemperature", "baskingUvi", "coolSideHumidity"] as const).every((key) => {
@@ -75,7 +79,7 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
   return typeof project.id === "string" && typeof project.name === "string" &&
     ["Basse", "Cubique", "Verticale"].includes(project.shape as string) &&
     ["Désertique", "Tropical", "Paludarium"].includes(project.biotope as string) &&
-    isValidDimensions && typeof project.species === "string" && allowedSpecies.includes(project.species) &&
+    isValidDimensions && isValidLifeStage && typeof project.species === "string" && allowedSpecies.includes(project.species) &&
     isValidDecorations && isValidMeasurements && Number.isInteger(project.nextId);
 }
 
@@ -96,8 +100,10 @@ export function parseProjectExport(value: unknown, allowedSpecies: readonly stri
   return project;
 }
 
-export function calculateProjectChecks({ species, dimensions, decorations, measurements }: ProjectCheckInput): ProjectCheckSummary {
-  const minimumDimensions = species.minimumDimensions;
+export function calculateProjectChecks({ species, dimensions, decorations, measurements, lifeStage = "adult" }: ProjectCheckInput): ProjectCheckSummary {
+  const minimumDimensions = lifeStage === "adult" ? species.minimumDimensions : null;
+  const referenceRanges = lifeStage === "adult" ? species.referenceRanges : null;
+  const hidesAtBothEnds = lifeStage === "adult" ? species.hidesAtBothEnds : null;
   const dimensionsMeetMinimum = minimumDimensions !== null &&
     dimensions.width >= minimumDimensions.width &&
     dimensions.depth >= minimumDimensions.depth &&
@@ -105,7 +111,7 @@ export function calculateProjectChecks({ species, dimensions, decorations, measu
   const hasHideAtLeftEnd = decorations.some((item) => item.kind === "Cachette" && item.position.x <= -0.5);
   const hasHideAtRightEnd = decorations.some((item) => item.kind === "Cachette" && item.position.x >= 0.5);
   const hideEndCount = Number(hasHideAtLeftEnd) + Number(hasHideAtRightEnd);
-  const hidingCheck: ProjectCheck = species.hidesAtBothEnds === null
+  const hidingCheck: ProjectCheck = hidesAtBothEnds === null
     ? { label: "Cachettes aux deux extrémités", status: "unknown", detail: "Non documenté" }
     : {
       label: "Cachettes aux deux extrémités",
@@ -113,7 +119,7 @@ export function calculateProjectChecks({ species, dimensions, decorations, measu
       detail: hideEndCount === 2 ? "2/2 extrémités couvertes" : `${hideEndCount}/2 extrémités · cachette manquante dans le quart ${hasHideAtLeftEnd ? "droit" : "gauche"}`,
     };
   const rangeCheck = (label: string, key: MeasurementKey, unit: string): ProjectCheck => {
-    const range = species.referenceRanges?.[key];
+    const range = referenceRanges?.[key];
     const value = measurements[key];
     if (!range) return { label, status: "unknown", detail: "Non documenté" };
     const rangeLabel = `${range[0]}–${range[1]} ${unit}`;

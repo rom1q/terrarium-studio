@@ -43,6 +43,7 @@ const project: StoredProject = {
   biotope: "Tropical",
   dimensions: { width: 120, depth: 60, height: 80 },
   species: speciesLabels[0],
+  lifeStage: "adult",
   decorations: [
     { id: 1, kind: "Cachette", position: { x: -0.5, z: 0 } },
     { id: 2, kind: "Cachette", position: { x: 0.5, z: 0 } },
@@ -63,8 +64,14 @@ describe("project export validation", () => {
     expect(parseProjectExport(projectExport, speciesLabels)).toEqual(project);
   });
 
+  it("preserves life stage in project exports", () => {
+    const juvenileProject = { ...project, lifeStage: "juvenile" as const };
+
+    expect(parseProjectExport({ ...projectExport, project: juvenileProject }, speciesLabels)?.lifeStage).toBe("juvenile");
+  });
+
   it("accepts older projects without measurements", () => {
-    const { measurements: _measurements, ...legacyProject } = project;
+    const { measurements: _measurements, lifeStage: _lifeStage, ...legacyProject } = project;
     expect(isStoredProject(legacyProject, speciesLabels)).toBe(true);
     expect(parseProjectExport({ ...projectExport, project: legacyProject }, speciesLabels)).toEqual(legacyProject);
   });
@@ -72,6 +79,7 @@ describe("project export validation", () => {
   it.each([
     ["unsupported version", { ...projectExport, version: 2 }],
     ["invalid timestamp", { ...projectExport, exportedAt: "not-a-date" }],
+    ["invalid life stage", { ...projectExport, project: { ...project, lifeStage: "hatchling" } }],
     ["unknown species", { ...projectExport, project: { ...project, species: "Unknown species" } }],
     ["oversized dimensions", { ...projectExport, project: { ...project, dimensions: { ...project.dimensions, width: 1001 } } }],
     ["position outside terrarium", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], position: { x: 1.1, z: 0 } }] } }],
@@ -142,6 +150,19 @@ describe("project checks", () => {
 
     expect(result.checks[0].status).toBe("insufficient");
     expect(result.overallStatus).toBe("Repères à compléter");
+  });
+
+  it("does not apply adult thresholds to a juvenile", () => {
+    const result = calculateProjectChecks({
+      species: pogona,
+      lifeStage: "juvenile",
+      dimensions: { width: 30, depth: 30, height: 30 },
+      decorations: [],
+      measurements: { hotSideTemperature: 10, coolSideTemperature: 10, baskingUvi: 0, coolSideHumidity: 100 },
+    });
+
+    expect(result.checks.every((check) => check.status === "unknown")).toBe(true);
+    expect(result.overallStatus).toBe("À documenter");
   });
 });
 
