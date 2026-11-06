@@ -12,6 +12,7 @@ export type SpeciesProfile = {
   scientificName: string;
   commonName: string;
   source: SpeciesSource | null;
+  stageGuidance?: Partial<Record<LifeStage, string>>;
   minimumDimensions: { width: number; depth: number; height: number } | null;
   referenceRanges: ReferenceRanges | null;
   hidesAtBothEnds: boolean | null;
