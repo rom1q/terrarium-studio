@@ -21,13 +21,58 @@ import {
 
 type Shape = "Basse" | "Cubique" | "Verticale";
 type Biotope = "Désertique" | "Tropical" | "Paludarium";
-type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche" };
+type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche"; position: { x: number; z: number } };
+type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
+type SpeciesProfile = {
+  label: string;
+  scientificName: string;
+  commonName: string;
+  source: SpeciesSource | null;
+  minimumDimensions: { width: number; depth: number; height: number } | null;
+};
+type StoredProject = {
+  id: string;
+  name: string;
+  shape: Shape;
+  biotope: Biotope;
+  dimensions: { width: number; depth: number; height: number };
+  species: string;
+  decorations: Decoration[];
+  nextId: number;
+};
 
-const speciesList = [
-  "Pogona vitticeps · Dragon barbu",
-  "Eublepharis macularius · Gecko léopard",
-  "Correlophus ciliatus · Gecko à crête",
-  "Dendrobates tinctorius · Dendrobate",
+const projectsStorageKey = "terrarium-studio-projects";
+const currentProjectStorageKey = "terrarium-studio-current-project";
+
+const speciesList: SpeciesProfile[] = [
+  {
+    label: "Pogona vitticeps · Dragon barbu",
+    scientificName: "Pogona vitticeps",
+    commonName: "Dragon barbu",
+    source: { title: "Caring for your bearded dragon", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/beardeddragon", checkedAt: "2026-11-05" },
+    minimumDimensions: { width: 120, depth: 60, height: 60 },
+  },
+  {
+    label: "Eublepharis macularius · Gecko léopard",
+    scientificName: "Eublepharis macularius",
+    commonName: "Gecko léopard",
+    source: { title: "Leopard Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/leopard-gecko-care/", checkedAt: "2026-11-05" },
+    minimumDimensions: { width: 92, depth: 46, height: 46 },
+  },
+  {
+    label: "Correlophus ciliatus · Gecko à crête",
+    scientificName: "Correlophus ciliatus",
+    commonName: "Gecko à crête",
+    source: { title: "Crested Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko-care/", checkedAt: "2026-11-05" },
+    minimumDimensions: { width: 46, depth: 46, height: 61 },
+  },
+  {
+    label: "Dendrobates tinctorius · Dendrobate",
+    scientificName: "Dendrobates tinctorius",
+    commonName: "Dendrobate",
+    source: null,
+    minimumDimensions: null,
+  },
 ];
 
 const biotopeColors: Record<Biotope, { ground: number; plant: number; water: number }> = {
@@ -36,19 +81,79 @@ const biotopeColors: Record<Biotope, { ground: number; plant: number; water: num
   Paludarium: { ground: 0x665342, plant: 0x4c8051, water: 0x69abb0 },
 };
 
+const createDefaultDecorations = (): Decoration[] => [
+  { id: 1, kind: "Plante", position: { x: -0.62, z: -0.42 } },
+  { id: 2, kind: "Roche", position: { x: 0.22, z: 0.4 } },
+  { id: 3, kind: "Cachette", position: { x: 0.18, z: -0.42 } },
+];
+
+function isStoredProject(value: unknown): value is StoredProject {
+  if (typeof value !== "object" || value === null) return false;
+  const project = value as Record<string, unknown>;
+  const dimensions = project.dimensions;
+  const isValidDimensions = typeof dimensions === "object" && dimensions !== null &&
+    ["width", "depth", "height"].every((key) => {
+      const dimension = (dimensions as Record<string, unknown>)[key];
+      return typeof dimension === "number" && Number.isFinite(dimension);
+    });
+  const isValidDecorations = Array.isArray(project.decorations) && project.decorations.every((item) => {
+    if (typeof item !== "object" || item === null) return false;
+    const decoration = item as Record<string, unknown>;
+    const position = decoration.position;
+    return Number.isInteger(decoration.id) &&
+      ["Plante", "Cachette", "Roche"].includes(decoration.kind as string) &&
+      typeof position === "object" && position !== null &&
+      typeof (position as Record<string, unknown>).x === "number" &&
+      typeof (position as Record<string, unknown>).z === "number";
+  });
+
+  return typeof project.id === "string" && typeof project.name === "string" &&
+    ["Basse", "Cubique", "Verticale"].includes(project.shape as string) &&
+    ["Désertique", "Tropical", "Paludarium"].includes(project.biotope as string) &&
+    isValidDimensions && typeof project.species === "string" && speciesList.some((species) => species.label === project.species) &&
+    isValidDecorations && Number.isInteger(project.nextId);
+}
+
+function readCurrentProject(): StoredProject | null {
+  try {
+    const value = localStorage.getItem(currentProjectStorageKey);
+    if (!value) return null;
+    const project: unknown = JSON.parse(value);
+    return isStoredProject(project) ? project : null;
+  } catch {
+    return null;
+  }
+}
+
+function readSavedProjects(): StoredProject[] {
+  try {
+    const value = localStorage.getItem(projectsStorageKey);
+    if (!value) return [];
+    const projects: unknown = JSON.parse(value);
+    return Array.isArray(projects) ? projects.filter(isStoredProject) : [];
+  } catch {
+    return [];
+  }
+}
+
 function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const [shape, setShape] = useState<Shape>("Basse");
-  const [biotope, setBiotope] = useState<Biotope>("Tropical");
-  const [dimensions, setDimensions] = useState({ width: 120, depth: 60, height: 80 });
-  const [species, setSpecies] = useState(speciesList[0]);
+  const projectMenuRef = useRef<HTMLDetailsElement>(null);
+  const [initialProject] = useState<StoredProject | null>(readCurrentProject);
+  const [projectId, setProjectId] = useState(initialProject?.id ?? null);
+  const [projectName, setProjectName] = useState(initialProject?.name ?? "Habitat sans titre");
+  const [savedProjects, setSavedProjects] = useState<StoredProject[]>(readSavedProjects);
+  const [saveFeedback, setSaveFeedback] = useState("");
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [draftProjectName, setDraftProjectName] = useState("");
+  const [shape, setShape] = useState<Shape>(initialProject?.shape ?? "Basse");
+  const [biotope, setBiotope] = useState<Biotope>(initialProject?.biotope ?? "Tropical");
+  const [dimensions, setDimensions] = useState(initialProject?.dimensions ?? { width: 120, depth: 60, height: 80 });
+  const [species, setSpecies] = useState(initialProject?.species ?? speciesList[0].label);
   const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
-  const [decorations, setDecorations] = useState<Decoration[]>([
-    { id: 1, kind: "Plante" },
-    { id: 2, kind: "Roche" },
-    { id: 3, kind: "Cachette" },
-  ]);
-  const [nextId, setNextId] = useState(4);
+  const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
+  const [decorations, setDecorations] = useState<Decoration[]>(initialProject?.decorations ?? createDefaultDecorations());
+  const [nextId, setNextId] = useState(initialProject?.nextId ?? 4);
 
   useEffect(() => {
     const host = viewportRef.current;
@@ -150,11 +255,13 @@ function App() {
       addBeam(rail, rail, depth + rail, widthHalf, y, 0);
     }
 
-    decorations.forEach((item, index) => {
-      const x = -width * 0.31 + (index % 4) * width * 0.2;
-      const z = index % 2 === 0 ? -depth * 0.21 : depth * 0.2;
+    const decorationObjects: THREE.Object3D[] = [];
+    decorations.forEach((item) => {
+      const x = item.position.x * widthHalf;
+      const z = item.position.z * depthHalf;
       if (item.kind === "Plante") {
         const plant = new THREE.Group();
+        plant.userData.decorationId = item.id;
         const stem = new THREE.Mesh(
           new THREE.CylinderGeometry(0.018, 0.026, 0.62, 7),
           new THREE.MeshStandardMaterial({ color: 0x65804b, roughness: 0.8 }),
@@ -173,8 +280,10 @@ function App() {
         }
         plant.position.set(x, floorY + 0.1, z);
         scene.add(plant);
+        decorationObjects.push(plant);
       } else if (item.kind === "Cachette") {
         const hide = new THREE.Group();
+        hide.userData.decorationId = item.id;
         const body = new THREE.Mesh(
           new THREE.DodecahedronGeometry(0.42, 0),
           new THREE.MeshStandardMaterial({ color: 0x88735b, roughness: 1 }),
@@ -191,20 +300,95 @@ function App() {
         hide.add(entrance);
         hide.position.set(x, floorY + 0.1, z);
         scene.add(hide);
+        decorationObjects.push(hide);
       } else {
         const rock = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(0.28 + (index % 3) * 0.06, 0),
-          new THREE.MeshStandardMaterial({ color: index % 2 ? 0x9a8b76 : 0x776a5d, roughness: 0.98 }),
+          new THREE.DodecahedronGeometry(0.32, 0),
+          new THREE.MeshStandardMaterial({ color: item.id % 2 ? 0x9a8b76 : 0x776a5d, roughness: 0.98 }),
         );
         rock.scale.set(1.2, 0.82, 0.95);
         rock.position.set(x, floorY + 0.28, z);
+        rock.userData.decorationId = item.id;
         scene.add(rock);
+        decorationObjects.push(rock);
       }
     });
 
-    const grid = new THREE.GridHelper(12, 24, 0xadb8aa, 0xcbd1c7);
-    grid.position.y = -0.02;
-    scene.add(grid);
+    const backgroundGrid = new THREE.GridHelper(12, 24, 0xadb8aa, 0xcbd1c7);
+    backgroundGrid.position.y = -0.02;
+    backgroundGrid.visible = viewMode !== "plan";
+    scene.add(backgroundGrid);
+
+    const planGridPoints: THREE.Vector3[] = [];
+    for (let centimeters = 0; centimeters < dimensions.width; centimeters += 10) {
+      const x = (centimeters / dimensions.width - 0.5) * width;
+      planGridPoints.push(new THREE.Vector3(x, 0, -depthHalf), new THREE.Vector3(x, 0, depthHalf));
+    }
+    planGridPoints.push(new THREE.Vector3(widthHalf, 0, -depthHalf), new THREE.Vector3(widthHalf, 0, depthHalf));
+    for (let centimeters = 0; centimeters < dimensions.depth; centimeters += 10) {
+      const z = (centimeters / dimensions.depth - 0.5) * depth;
+      planGridPoints.push(new THREE.Vector3(-widthHalf, 0, z), new THREE.Vector3(widthHalf, 0, z));
+    }
+    planGridPoints.push(new THREE.Vector3(-widthHalf, 0, depthHalf), new THREE.Vector3(widthHalf, 0, depthHalf));
+    const planGrid = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(planGridPoints),
+      new THREE.LineBasicMaterial({ color: 0x758a71, transparent: true, opacity: 0.3 }),
+    );
+    planGrid.position.y = floorY + 0.105;
+    planGrid.visible = viewMode === "plan";
+    scene.add(planGrid);
+
+    let draggedObject: THREE.Object3D | null = null;
+    let draggedId: number | null = null;
+    const dragOffset = new THREE.Vector2();
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(floorY + 0.1));
+    const updatePointerRay = (event: PointerEvent) => {
+      const bounds = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+      pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (viewMode !== "plan" || event.button !== 0) return;
+      updatePointerRay(event);
+      const hit = raycaster.intersectObjects(decorationObjects, true)[0];
+      if (!hit) return;
+      let object: THREE.Object3D | null = hit.object;
+      while (object && object.userData.decorationId == null) object = object.parent;
+      const point = raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3());
+      if (!object || !point) return;
+      draggedObject = object;
+      draggedId = Number(object.userData.decorationId);
+      dragOffset.set(object.position.x - point.x, object.position.z - point.z);
+      setSelectedDecorationId(draggedId);
+      controls.enabled = false;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!draggedObject) return;
+      updatePointerRay(event);
+      const point = raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3());
+      if (!point) return;
+      draggedObject.position.x = THREE.MathUtils.clamp(point.x + dragOffset.x, -widthHalf + 0.18, widthHalf - 0.18);
+      draggedObject.position.z = THREE.MathUtils.clamp(point.z + dragOffset.y, -depthHalf + 0.18, depthHalf - 0.18);
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (!draggedObject || draggedId === null) return;
+      const id = draggedId;
+      const position = { x: draggedObject.position.x / widthHalf, z: draggedObject.position.z / depthHalf };
+      draggedObject = null;
+      draggedId = null;
+      controls.enabled = true;
+      if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
+      setDecorations((current) => current.map((item) => item.id === id ? { ...item, position } : item));
+    };
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointercancel", onPointerUp);
 
     const resize = () => {
       const bounds = host.getBoundingClientRect();
@@ -229,10 +413,14 @@ function App() {
       cancelAnimationFrame(frame);
       observer.disconnect();
       controls.dispose();
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", onPointerUp);
       renderer.dispose();
       host.replaceChildren();
       scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
           object.geometry.dispose();
           const materials = Array.isArray(object.material) ? object.material : [object.material];
           materials.forEach((material) => material.dispose());
@@ -249,13 +437,108 @@ function App() {
   };
 
   const addDecoration = (kind: Decoration["kind"]) => {
-    setDecorations((current) => [...current, { id: nextId, kind }]);
+    setDecorations((current) => {
+      const column = current.length % 4;
+      const row = Math.floor(current.length / 4);
+      const position = { x: (column - 1.5) * 0.32, z: row % 2 === 0 ? -0.45 : 0.45 };
+      return [...current, { id: nextId, kind, position }];
+    });
     setNextId((current) => current + 1);
   };
 
   const removeDecoration = (id: number) => {
     setDecorations((current) => current.filter((item) => item.id !== id));
+    if (selectedDecorationId === id) setSelectedDecorationId(null);
   };
+
+  const persistProject = (name: string) => {
+    const normalizedName = name.trim() || "Habitat sans titre";
+    const project: StoredProject = {
+      id: projectId ?? globalThis.crypto.randomUUID(),
+      name: normalizedName,
+      shape,
+      biotope,
+      dimensions,
+      species,
+      decorations,
+      nextId,
+    };
+
+    try {
+      const projects = [...savedProjects.filter((saved) => saved.id !== project.id), project];
+      localStorage.setItem(projectsStorageKey, JSON.stringify(projects));
+      localStorage.setItem(currentProjectStorageKey, JSON.stringify(project));
+      setProjectId(project.id);
+      setProjectName(project.name);
+      setSavedProjects(projects);
+      setShowSaveDialog(false);
+      setSaveFeedback("Projet enregistré");
+      window.setTimeout(() => setSaveFeedback(""), 2200);
+    } catch {
+      setSaveFeedback("Sauvegarde impossible sur cet appareil");
+    }
+  };
+
+  const saveProject = () => {
+    if (projectId) {
+      persistProject(projectName);
+      return;
+    }
+    setDraftProjectName(projectName === "Habitat sans titre" ? "" : projectName);
+    setShowSaveDialog(true);
+  };
+
+  const loadProject = (project: StoredProject) => {
+    setProjectId(project.id);
+    setProjectName(project.name);
+    setShape(project.shape);
+    setBiotope(project.biotope);
+    setDimensions(project.dimensions);
+    setSpecies(project.species);
+    setDecorations(project.decorations);
+    setNextId(project.nextId);
+    setSelectedDecorationId(null);
+    setSaveFeedback("");
+    localStorage.setItem(currentProjectStorageKey, JSON.stringify(project));
+    projectMenuRef.current?.removeAttribute("open");
+  };
+
+  const startNewProject = () => {
+    if (!window.confirm("Créer un nouveau projet ? Les changements non enregistrés seront perdus.")) return;
+    setProjectId(null);
+    setProjectName("Habitat sans titre");
+    setShape("Basse");
+    setBiotope("Tropical");
+    setDimensions({ width: 120, depth: 60, height: 80 });
+    setSpecies(speciesList[0].label);
+    setDecorations(createDefaultDecorations());
+    setNextId(4);
+    setSelectedDecorationId(null);
+    setViewMode("3d");
+    setSaveFeedback("");
+    localStorage.removeItem(currentProjectStorageKey);
+    projectMenuRef.current?.removeAttribute("open");
+  };
+
+  const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
+  const minimumDimensions = selectedSpecies.minimumDimensions;
+  const dimensionsMeetMinimum = minimumDimensions !== null &&
+    dimensions.width >= minimumDimensions.width &&
+    dimensions.depth >= minimumDimensions.depth &&
+    dimensions.height >= minimumDimensions.height;
+  const checks: { label: string; status: "met" | "insufficient" | "unknown"; detail: string }[] = [
+    {
+      label: "Dimensions minimales",
+      status: minimumDimensions === null ? "unknown" : dimensionsMeetMinimum ? "met" : "insufficient",
+      detail: minimumDimensions === null ? "Non documenté" : `${dimensionsMeetMinimum ? "Respecté" : "Insuffisant"} · min. ${minimumDimensions.width} × ${minimumDimensions.depth} × ${minimumDimensions.height} cm`,
+    },
+    { label: "Gradient thermique", status: "unknown", detail: "Non documenté" },
+    { label: "Humidité et ventilation", status: "unknown", detail: "Non documenté" },
+    { label: "Cachettes et enrichissement", status: "unknown", detail: "Non documenté" },
+  ];
+  const hasInsufficientCheck = checks.some((check) => check.status === "insufficient");
+  const allChecksDocumented = checks.every((check) => check.status !== "unknown");
+  const overallStatus = hasInsufficientCheck ? "À corriger" : allChecksDocumented ? "Critères documentés" : "À documenter";
 
   return (
     <main className="app-shell">
@@ -264,10 +547,20 @@ function App() {
           <span className="brand-mark"><Leaf size={19} strokeWidth={2.2} /></span>
           <span>terrarium<span className="brand-light"> studio</span></span>
         </a>
-        <div className="project-name"><span className="live-dot" /> Habitat sans titre <ChevronDown size={14} /></div>
+        <details className="project-menu" ref={projectMenuRef}>
+          <summary className="project-name"><span className="live-dot" /> {projectName} <ChevronDown size={14} /></summary>
+          <div className="project-dropdown">
+            <button type="button" className="new-project-option" onClick={startNewProject}>Nouveau projet</button>
+            <div className="project-list-label">Projets enregistrés</div>
+            {savedProjects.length === 0 ? <p className="no-saved-projects">Aucun projet enregistré</p> : savedProjects.map((project) => (
+              <button type="button" className="saved-project-option" key={project.id} onClick={() => loadProject(project)}>{project.name}</button>
+            ))}
+          </div>
+        </details>
         <div className="topbar-actions">
           <button className="icon-button" type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={17} /></button>
-          <button className="save-button" type="button" onClick={() => window.alert("La sauvegarde de projet sera ajoutée dans une prochaine étape.")}>Enregistrer le projet</button>
+          <button className="save-button" type="button" onClick={saveProject}>Enregistrer le projet</button>
+          <span className="save-feedback" aria-live="polite">{saveFeedback}</span>
         </div>
       </header>
 
@@ -324,9 +617,9 @@ function App() {
             </div>
             <div className="decor-list">
               {decorations.map((item, index) => (
-                <div className="decor-item" key={item.id}>
+                <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
                   <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={14} /> : item.kind === "Cachette" ? <Expand size={14} /> : <span className="rock-icon" />}</span>
-                  <span>{item.kind} <small>{String(index + 1).padStart(2, "0")}</small></span>
+                  <span className="decor-label" onClick={() => setSelectedDecorationId(item.id)}><span>{item.kind} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">X {Math.round((item.position.x + 1) * dimensions.width / 2)} cm · Z {Math.round((item.position.z + 1) * dimensions.depth / 2)} cm · centre → paroi {Math.round(Math.min((item.position.x + 1) * dimensions.width / 2, (1 - item.position.x) * dimensions.width / 2, (item.position.z + 1) * dimensions.depth / 2, (1 - item.position.z) * dimensions.depth / 2))} cm</small></span>
                   <button type="button" className="remove-button" title={`Retirer ${item.kind}`} aria-label={`Retirer ${item.kind}`} onClick={() => removeDecoration(item.id)}><X size={14} /></button>
                 </div>
               ))}
@@ -339,11 +632,11 @@ function App() {
             <label className="species-select-wrap">
               <span className="sr-only">Espèce de reptile ou amphibien</span>
               <select value={species} onChange={(event) => setSpecies(event.target.value)}>
-                {speciesList.map((item) => <option key={item}>{item}</option>)}
+                {speciesList.map((item) => <option key={item.label}>{item.label}</option>)}
               </select>
               <ChevronDown size={15} />
             </label>
-            <p className="species-note"><CircleHelp size={13} /> La base d'espèces sera enrichie avec des sources vérifiables.</p>
+            <p className="species-note"><CircleHelp size={13} /> {selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
           </section>
         </aside>
 
@@ -353,32 +646,43 @@ function App() {
             <span className="stage-dimensions">{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</span>
           </div>
           <div className="viewport-wrap">
-            <div className="viewport" ref={viewportRef} />
+            <div className="viewport" ref={viewportRef} data-mode={viewMode} />
             <div className="viewport-label"><span className="live-dot" /> {viewMode === "plan" ? "VUE EN PLAN" : "APERÇU EN DIRECT"}</div>
             <div className="viewport-tools"><button type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={16} /></button></div>
             <div className="viewport-caption"><span className="caption-index">FIG. 01</span><span>{biotope} <b>·</b> {shape.toLowerCase()}</span></div>
           </div>
-          <div className="stage-footer"><span><span className="legend-dot glass-dot" /> Verre clair</span><span><span className="legend-dot ground-dot" /> Substrat {biotope.toLowerCase()}</span><span className="orbit-hint">{decorations.length} éléments dans la scène</span></div>
+          <div className="stage-footer"><span><span className="legend-dot glass-dot" /> Verre clair</span><span><span className="legend-dot ground-dot" /> Substrat {biotope.toLowerCase()}</span><span className="orbit-hint">{viewMode === "plan" ? "Glisser un élément pour le déplacer" : `${decorations.length} éléments dans la scène`}</span></div>
         </section>
 
         <aside className="panel right-panel">
           <div className="analysis-heading"><span className="analysis-icon"><ShieldCheck size={19} /></span><div><p className="eyebrow">BILAN DU PROJET</p><h2>Conformité</h2></div></div>
-          <div className="status-block">
-            <div className="status-top"><span className="status-mark"><AlertTriangle size={15} /></span><span>À documenter</span></div>
-            <p>La vérification des besoins de cette espèce n'est pas encore disponible.</p>
+          <div className={`status-block ${hasInsufficientCheck ? "insufficient" : ""}`}>
+            <div className="status-top"><span className="status-mark">{hasInsufficientCheck ? <AlertTriangle size={15} /> : <CircleHelp size={15} />}</span><span>{overallStatus}</span></div>
+            <p>{hasInsufficientCheck ? "Au moins une dimension est inférieure au minimum indiqué par la source. Vérifiez le guide complet avant toute décision." : "Ce bilan est partiel : les critères sans données sourcées restent inconnus et ne sont pas considérés comme conformes."}</p>
           </div>
-          <div className="selected-species"><p className="field-label">ESPÈCE SÉLECTIONNÉE</p><strong>{species.split(" · ")[1]}</strong><span>{species.split(" · ")[0]}</span></div>
+          <div className="selected-species"><p className="field-label">ESPÈCE SÉLECTIONNÉE</p><strong>{selectedSpecies.commonName}</strong><span>{selectedSpecies.scientificName}</span></div>
+          <div className="species-source"><p className="field-label">RÉFÉRENCE</p>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><small>Consultée le {selectedSpecies.source.checkedAt}</small></> : <span>Aucune référence vérifiée. Ces points restent inconnus.</span>}</div>
           <div className="checklist-heading"><span>Points à vérifier</span><span className="checklist-line" /></div>
-          <div className="check-row"><span className="check-icon pending"><CircleHelp size={14} /></span><span>Dimensions minimales</span><small>À sourcer</small></div>
-          <div className="check-row"><span className="check-icon pending"><CircleHelp size={14} /></span><span>Gradient thermique</span><small>À sourcer</small></div>
-          <div className="check-row"><span className="check-icon pending"><CircleHelp size={14} /></span><span>Humidité et ventilation</span><small>À sourcer</small></div>
-          <div className="check-row"><span className="check-icon pending"><CircleHelp size={14} /></span><span>Cachettes et enrichissement</span><small>À sourcer</small></div>
+          {checks.map((check) => <div className="check-row" key={check.label}><span className={`check-icon ${check.status}`}>{check.status === "met" ? <Check size={14} /> : check.status === "insufficient" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span><span>{check.label}</span><small>{check.detail}</small></div>)}
           <div className="report-note"><AlertTriangle size={15} /><p>Le futur bilan devra citer ses sources et signaler les informations manquantes. Ce prototype ne valide pas encore un habitat.</p></div>
           <div className="habitat-summary"><p className="field-label">RÉCAPITULATIF</p><div><span>Type</span><strong>{biotope}</strong></div><div><span>Volume</span><strong>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</strong></div><div><span>Décor</span><strong>{decorations.length} éléments</strong></div></div>
           <button className="review-button" type="button" onClick={() => window.alert("Le rapport détaillé sera disponible après l'ajout de données d'élevage sourcées.")}>Voir le rapport <ChevronDown size={15} className="rotate-icon" /></button>
         </aside>
       </section>
       <footer className="app-footer"><span>PROTOTYPE · CONFIGURATEUR D'HABITAT</span><span>Terrarium Studio <span className="footer-separator">/</span> v0.1</span></footer>
+      {showSaveDialog && (
+        <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSaveDialog(false); }}>
+          <form className="project-save-dialog" role="dialog" aria-modal="true" aria-labelledby="save-project-title" onSubmit={(event) => { event.preventDefault(); persistProject(draftProjectName); }}>
+            <p className="eyebrow">NOUVEAU PROJET</p>
+            <h2 id="save-project-title">Enregistrer le projet</h2>
+            <label className="project-name-field"><span>Nom du projet</span><input autoFocus maxLength={60} required value={draftProjectName} onChange={(event) => setDraftProjectName(event.target.value)} /></label>
+            <div className="dialog-actions">
+              <button type="button" className="cancel-button" onClick={() => setShowSaveDialog(false)}>Annuler</button>
+              <button type="submit" className="save-button">Enregistrer</button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }
