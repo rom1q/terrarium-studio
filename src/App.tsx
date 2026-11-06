@@ -53,7 +53,10 @@ const speciesList: SpeciesProfile[] = [
     label: "Pogona vitticeps · Dragon barbu",
     scientificName: "Pogona vitticeps",
     commonName: "Dragon barbu",
-    source: { title: "Caring for your bearded dragon", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/beardeddragon", checkedAt: "2026-11-05" },
+    source: { title: "Caring for your bearded dragon", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/beardeddragon", checkedAt: "2026-11-06" },
+    stageGuidance: {
+      juvenile: "Les jeunes dragons ont besoin d’une plus grande part de proies; la part de végétaux augmente avec l’âge. La RSPCA indique deux repas par jour pour les bébés et un pour les juvéniles.",
+    },
     minimumDimensions: { width: 120, depth: 60, height: 60 },
     referenceRanges: {
       hotSideTemperature: [38, 42],
@@ -904,7 +907,8 @@ function App() {
                 <button type="button" className={lifeStage === "adult" ? "active" : ""} aria-pressed={lifeStage === "adult"} onClick={() => setLifeStage("adult")}>Adulte</button>
               </div>
             </div>
-            <p className="species-note"><CircleHelp size={13} /> {lifeStage === "juvenile" ? "Aucun profil juvénile vérifié; les seuils adultes ne sont pas appliqués." : selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
+            <p className="species-note"><CircleHelp size={13} /> {lifeStage === "juvenile" ? "Profil d’habitat juvénile incomplet; les seuils adultes ne sont pas appliqués." : selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
+            {selectedSpecies.stageGuidance?.[lifeStage] && <div className="stage-guidance"><p className="field-label">Repère alimentaire · {selectedSpecies.source?.publisher}</p><p>{selectedSpecies.stageGuidance[lifeStage]}</p></div>}
             {selectedSpecies.referenceRanges && <div className="measurement-form">
               <p className="field-label">Mesures relevées <small>optionnel</small></p>
               <div className="measurement-grid">
@@ -983,6 +987,7 @@ function App() {
                 <strong>{check.label}</strong><span className={`report-check-status ${check.status}`}>{checkStatusLabels[check.status]}</span><p>{check.detail}</p>
               </div>)}
             </div>
+            {selectedSpecies.stageGuidance?.[lifeStage] && <section className="report-stage-guidance"><h3>Repère alimentaire · {selectedSpecies.source?.publisher}</h3><p>{selectedSpecies.stageGuidance[lifeStage]}</p></section>}
             <section className="report-reference"><h3>Référence consultée</h3>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><p>Consultée le {selectedSpecies.source.checkedAt}. Les repères ne remplacent pas le guide complet.</p></> : <p>Aucune référence de maintenance vérifiée pour cette espèce.</p>}</section>
             <p className="report-disclaimer">Ce bilan est partiel; les critères non documentés ne sont pas considérés comme conformes. Il ne certifie pas un habitat et ne remplace pas l’avis d’un vétérinaire spécialisé.</p>
             <div className="report-actions"><button type="button" className="cancel-button" onClick={() => setShowReport(false)}>Fermer</button><button type="button" className="save-button" onClick={() => window.print()}><Printer size={15} /> Imprimer / PDF</button></div>
