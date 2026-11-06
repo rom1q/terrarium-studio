@@ -10,6 +10,8 @@ La première version propose une scène 3D manipulable, le choix du format et de
 
 Prérequis : Node.js 20.19+ ou 22.12+ et npm.
 
+Sous Windows, double-cliquez sur `start-terrarium.cmd` pour installer les dépendances manquantes, lancer le serveur et ouvrir l’application dans votre navigateur.
+
 ```powershell
 npm install
 npm run dev
