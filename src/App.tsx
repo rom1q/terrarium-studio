@@ -29,6 +29,7 @@ type Measurements = { hotSideTemperature: number | null; coolSideTemperature: nu
 type MeasurementKey = keyof Measurements;
 type ReferenceRanges = Partial<Record<MeasurementKey, readonly [number, number]>>;
 type CheckStatus = "met" | "insufficient" | "attention" | "unknown";
+type SaveStatus = "idle" | "pending" | "saved" | "error";
 type SpeciesProfile = {
   label: string;
   scientificName: string;
@@ -187,10 +188,12 @@ function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const projectMenuRef = useRef<HTMLDetailsElement>(null);
   const [initialProject] = useState<StoredProject | null>(readCurrentProject);
+  const lastSavedProjectRef = useRef<string | null>(initialProject ? JSON.stringify(initialProject) : null);
   const [projectId, setProjectId] = useState(initialProject?.id ?? null);
   const [projectName, setProjectName] = useState(initialProject?.name ?? "Habitat sans titre");
   const [savedProjects, setSavedProjects] = useState<StoredProject[]>(readSavedProjects);
   const [saveFeedback, setSaveFeedback] = useState("");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>(initialProject ? "saved" : "idle");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [draftProjectName, setDraftProjectName] = useState("");
@@ -203,6 +206,35 @@ function App() {
   const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
   const [decorations, setDecorations] = useState<Decoration[]>(initialProject?.decorations ?? createDefaultDecorations());
   const [nextId, setNextId] = useState(initialProject?.nextId ?? 4);
+
+  useEffect(() => {
+    if (!projectId) {
+      setSaveStatus("idle");
+      return;
+    }
+
+    const project: StoredProject = { id: projectId, name: projectName, shape, biotope, dimensions, species, decorations, nextId, measurements };
+    const serializedProject = JSON.stringify(project);
+    if (serializedProject === lastSavedProjectRef.current) return;
+
+    setSaveStatus("pending");
+    setSaveFeedback("");
+    const timeout = window.setTimeout(() => {
+      if (serializedProject === lastSavedProjectRef.current) return;
+      try {
+        const projects = [...readSavedProjects().filter((saved) => saved.id !== project.id), project];
+        localStorage.setItem(projectsStorageKey, JSON.stringify(projects));
+        localStorage.setItem(currentProjectStorageKey, serializedProject);
+        lastSavedProjectRef.current = serializedProject;
+        setSavedProjects(projects);
+        setSaveStatus("saved");
+      } catch {
+        setSaveStatus("error");
+      }
+    }, 600);
+
+    return () => window.clearTimeout(timeout);
+  }, [projectId, projectName, shape, biotope, dimensions, species, decorations, nextId, measurements]);
 
   useEffect(() => {
     const host = viewportRef.current;
@@ -513,18 +545,22 @@ function App() {
       nextId,
       measurements,
     };
+    const serializedProject = JSON.stringify(project);
 
     try {
       const projects = [...savedProjects.filter((saved) => saved.id !== project.id), project];
       localStorage.setItem(projectsStorageKey, JSON.stringify(projects));
-      localStorage.setItem(currentProjectStorageKey, JSON.stringify(project));
+      localStorage.setItem(currentProjectStorageKey, serializedProject);
+      lastSavedProjectRef.current = serializedProject;
       setProjectId(project.id);
       setProjectName(project.name);
       setSavedProjects(projects);
       setShowSaveDialog(false);
+      setSaveStatus("saved");
       setSaveFeedback("Projet enregistré");
       window.setTimeout(() => setSaveFeedback(""), 2200);
     } catch {
+      setSaveStatus("error");
       setSaveFeedback("Sauvegarde impossible sur cet appareil");
     }
   };
@@ -539,6 +575,7 @@ function App() {
   };
 
   const loadProject = (project: StoredProject) => {
+    lastSavedProjectRef.current = JSON.stringify(project);
     setProjectId(project.id);
     setProjectName(project.name);
     setShape(project.shape);
@@ -549,6 +586,7 @@ function App() {
     setNextId(project.nextId);
     setMeasurements(project.measurements ?? createDefaultMeasurements());
     setSelectedDecorationId(null);
+    setSaveStatus("saved");
     setSaveFeedback("");
     localStorage.setItem(currentProjectStorageKey, JSON.stringify(project));
     projectMenuRef.current?.removeAttribute("open");
@@ -557,6 +595,7 @@ function App() {
   const startNewProject = () => {
     if (!window.confirm("Créer un nouveau projet ? Les changements non enregistrés seront perdus.")) return;
     setProjectId(null);
+    lastSavedProjectRef.current = null;
     setProjectName("Habitat sans titre");
     setShape("Basse");
     setBiotope("Tropical");
@@ -567,6 +606,7 @@ function App() {
     setMeasurements(createDefaultMeasurements());
     setSelectedDecorationId(null);
     setViewMode("3d");
+    setSaveStatus("idle");
     setSaveFeedback("");
     localStorage.removeItem(currentProjectStorageKey);
     projectMenuRef.current?.removeAttribute("open");
@@ -652,7 +692,7 @@ function App() {
         <div className="topbar-actions">
           <button className="icon-button" type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={17} /></button>
           <button className="save-button" type="button" onClick={saveProject}>Enregistrer le projet</button>
-          <span className="save-feedback" aria-live="polite">{saveFeedback}</span>
+          <span className={`save-feedback ${saveStatus}`} aria-live="polite">{saveFeedback || (saveStatus === "pending" ? "Enregistrement…" : saveStatus === "saved" ? "Enregistré localement" : saveStatus === "error" ? "Échec de sauvegarde" : "À enregistrer")}</span>
         </div>
       </header>
 
