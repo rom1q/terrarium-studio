@@ -29,8 +29,10 @@ import {
   isStoredProject,
   measureDecorationPlacement,
   parseProjectExport,
+  positionDecorationAtCm,
   PROJECT_EXPORT_FORMAT,
   removeSavedProjectRecord,
+  resizeDecoration,
   renameSavedProjectRecord,
   type Biotope,
   type CheckStatus,
@@ -329,6 +331,7 @@ function App() {
     decorations.forEach((item) => {
       const x = item.position.x * widthHalf;
       const z = item.position.z * depthHalf;
+      const sizeScale = (item.size ?? 100) / 100;
       if (item.kind === "Plante") {
         const plant = new THREE.Group();
         plant.userData.decorationId = item.id;
@@ -348,6 +351,7 @@ function App() {
           foliage.rotation.x = Math.sin(leaf * 1.25) * 0.4;
           plant.add(foliage);
         }
+        plant.scale.setScalar(sizeScale);
         plant.position.set(x, floorY + 0.1, z);
         scene.add(plant);
         decorationObjects.push(plant);
@@ -368,6 +372,7 @@ function App() {
         entrance.rotation.x = Math.PI / 2;
         entrance.position.set(0, 0.19, 0.36);
         hide.add(entrance);
+        hide.scale.setScalar(sizeScale);
         hide.position.set(x, floorY + 0.1, z);
         scene.add(hide);
         decorationObjects.push(hide);
@@ -376,7 +381,7 @@ function App() {
           new THREE.DodecahedronGeometry(0.32, 0),
           new THREE.MeshStandardMaterial({ color: item.id % 2 ? 0x9a8b76 : 0x776a5d, roughness: 0.98 }),
         );
-        rock.scale.set(1.2, 0.82, 0.95);
+        rock.scale.set(1.2 * sizeScale, 0.82 * sizeScale, 0.95 * sizeScale);
         rock.position.set(x, floorY + 0.28, z);
         rock.userData.decorationId = item.id;
         scene.add(rock);
@@ -514,6 +519,16 @@ function App() {
       return [...current, { id: nextId, kind, position }];
     });
     setNextId((current) => current + 1);
+  };
+
+  const updateDecorationPosition = (id: number, axis: "x" | "z", value: string) => {
+    const centimeters = Number(value);
+    if (!Number.isFinite(centimeters)) return;
+    setDecorations((current) => positionDecorationAtCm(current, id, axis, centimeters, dimensions));
+  };
+
+  const updateDecorationSize = (id: number, value: string) => {
+    setDecorations((current) => resizeDecoration(current, id, Number(value)));
   };
 
   const removeDecoration = (id: number) => {
@@ -888,7 +903,14 @@ function App() {
               {positionedDecorations.map((item, index) => (
                 <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
                   <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={14} /> : item.kind === "Cachette" ? <Expand size={14} /> : <span className="rock-icon" />}</span>
-                  <span className="decor-label" onClick={() => setSelectedDecorationId(item.id)}><span>{item.kind} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">X {item.xCm} cm · Z {item.zCm} cm · paroi {item.nearestWallCm} cm</small></span>
+                  <div className="decor-editor">
+                    <div className="decor-item-heading"><span>{item.kind} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">Paroi proche {item.nearestWallCm} cm</small></div>
+                    <div className="decor-coordinate-grid">
+                      <label><span>X · gauche</span><input type="number" min="0" max={dimensions.width} step="1" aria-label={`Position X de ${item.kind} en centimètres`} value={item.xCm} onChange={(event) => updateDecorationPosition(item.id, "x", event.target.value)} /></label>
+                      <label><span>Z · haut</span><input type="number" min="0" max={dimensions.depth} step="1" aria-label={`Position Z de ${item.kind} en centimètres`} value={item.zCm} onChange={(event) => updateDecorationPosition(item.id, "z", event.target.value)} /></label>
+                    </div>
+                    <label className="decor-size-control"><span>Taille visuelle <output>{item.size ?? 100}%</output></span><input type="range" min="50" max="150" step="10" aria-label={`Taille visuelle de ${item.kind}`} value={item.size ?? 100} onChange={(event) => updateDecorationSize(item.id, event.target.value)} /></label>
+                  </div>
                   <button type="button" className="remove-button" title={`Retirer ${item.kind}`} aria-label={`Retirer ${item.kind}`} onClick={() => removeDecoration(item.id)}><X size={14} /></button>
                 </div>
               ))}
@@ -989,13 +1011,13 @@ function App() {
               <h3>Plan coté</h3>
               <div className="report-plan-dimensions"><span>Largeur intérieure <strong>{dimensions.width} cm</strong></span><span>Profondeur intérieure <strong>{dimensions.depth} cm</strong></span></div>
               <div className="report-plan-frame" role="img" aria-label={`Plan du terrarium de ${dimensions.width} par ${dimensions.depth} centimètres avec le décor placé`} style={{ aspectRatio: `${Math.max(1, dimensions.width)} / ${Math.max(1, dimensions.depth)}`, backgroundSize: `${Math.min(100, 1000 / Math.max(10, dimensions.width))}% ${Math.min(100, 1000 / Math.max(10, dimensions.depth))}%` }}>
-                {positionedDecorations.map((item) => <span key={item.id} className={`report-plan-marker marker-${item.kind.toLowerCase()}`} style={{ left: `${Math.min(97, Math.max(3, (item.position.x + 1) * 50))}%`, top: `${Math.min(97, Math.max(3, (item.position.z + 1) * 50))}%` }} title={`${item.kind} · X ${item.xCm} cm · Z ${item.zCm} cm`} aria-label={`${item.kind}, X ${item.xCm} cm, Z ${item.zCm} cm`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={12} /> : <span className="rock-icon" />}</span>)}
+                {positionedDecorations.map((item) => { const markerSize = 16 + (item.size ?? 100) * 0.08; return <span key={item.id} className={`report-plan-marker marker-${item.kind.toLowerCase()}`} style={{ left: `${Math.min(97, Math.max(3, (item.position.x + 1) * 50))}%`, top: `${Math.min(97, Math.max(3, (item.position.z + 1) * 50))}%`, width: markerSize, height: markerSize }} title={`${item.kind} · X ${item.xCm} cm · Z ${item.zCm} cm · ${item.size ?? 100}%`} aria-label={`${item.kind}, X ${item.xCm} cm, Z ${item.zCm} cm, taille ${item.size ?? 100}%`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={12} /> : <span className="rock-icon" />}</span>; })}
               </div>
               <div className="report-plan-legend"><span><i className="legend-dot plant-dot" /> Plante</span><span><i className="legend-dot hide-dot" /> Cachette</span><span><i className="legend-dot rock-dot" /> Roche</span></div>
               <h4>Décor à prévoir</h4>
               {decorationCounts.length === 0 ? <p className="report-no-decor">Aucun élément de décor placé.</p> : <>
                 <div className="report-material-counts">{decorationCounts.map((item) => <span key={item.kind}>{item.kind} <strong>× {item.count}</strong></span>)}</div>
-                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={13} /> : <span className="rock-icon" />}</span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")}</strong><small>X {item.xCm} cm depuis la gauche · Z {item.zCm} cm depuis le haut · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
+                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={13} /> : <span className="rock-icon" />}</span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")}</strong><small>X {item.xCm} cm depuis la gauche · Z {item.zCm} cm depuis le haut · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
               </>}
             </section>
             <h3>Critères et relevés</h3>

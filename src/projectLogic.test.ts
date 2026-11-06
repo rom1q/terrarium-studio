@@ -4,8 +4,10 @@ import {
   isStoredProject,
   measureDecorationPlacement,
   parseProjectExport,
+  positionDecorationAtCm,
   PROJECT_EXPORT_FORMAT,
   removeSavedProjectRecord,
+  resizeDecoration,
   renameSavedProjectRecord,
   type Measurements,
   type ProjectExport,
@@ -84,6 +86,7 @@ describe("project export validation", () => {
     ["unknown species", { ...projectExport, project: { ...project, species: "Unknown species" } }],
     ["oversized dimensions", { ...projectExport, project: { ...project, dimensions: { ...project.dimensions, width: 1001 } } }],
     ["position outside terrarium", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], position: { x: 1.1, z: 0 } }] } }],
+    ["decoration size outside supported range", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], size: 151 }] } }],
     ["duplicate decoration IDs", { ...projectExport, project: { ...project, decorations: [project.decorations[0], { ...project.decorations[1], id: project.decorations[0].id }] } }],
   ])("rejects %s", (_reason, invalidExport) => {
     expect(parseProjectExport(invalidExport, speciesLabels)).toBeNull();
@@ -173,6 +176,23 @@ describe("dimensioned plan placement", () => {
       { ...project.decorations[0], xCm: 30, zCm: 30, nearestWallCm: 30 },
       { ...project.decorations[1], xCm: 90, zCm: 30, nearestWallCm: 30 },
     ]);
+  });
+
+  it("sets a decoration position in centimetres and clamps it to the edge", () => {
+    const decoration = project.decorations[0];
+    const positioned = positionDecorationAtCm([decoration], decoration.id, "x", 30, { width: 120, depth: 60 });
+
+    expect(positioned[0].position.x).toBe(-0.5);
+    expect(measureDecorationPlacement(positioned, { width: 120, depth: 60 })[0].xCm).toBe(30);
+    expect(positionDecorationAtCm([decoration], decoration.id, "x", 500, { width: 120, depth: 60 })[0].position.x).toBe(1);
+  });
+
+  it("clamps visual size changes to 50–150 percent", () => {
+    const decoration = project.decorations[0];
+
+    expect(resizeDecoration([decoration], decoration.id, 125)[0].size).toBe(125);
+    expect(resizeDecoration([decoration], decoration.id, 200)[0].size).toBe(150);
+    expect(resizeDecoration([decoration], decoration.id, 20)[0].size).toBe(50);
   });
 });
 

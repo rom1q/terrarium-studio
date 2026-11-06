@@ -1,7 +1,8 @@
 export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
 export type LifeStage = "juvenile" | "adult";
-export type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche"; position: { x: number; z: number } };
+export type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche"; position: { x: number; z: number }; size?: number };
+export type DecorationAxis = "x" | "z";
 export type PositionedDecoration = Decoration & { xCm: number; zCm: number; nearestWallCm: number };
 export type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
 export type Measurements = { hotSideTemperature: number | null; coolSideTemperature: number | null; baskingUvi: number | null; coolSideHumidity: number | null };
@@ -65,6 +66,28 @@ export function measureDecorationPlacement(
   });
 }
 
+export function positionDecorationAtCm(
+  decorations: Decoration[],
+  id: number,
+  axis: DecorationAxis,
+  centimeters: number,
+  dimensions: { width: number; depth: number },
+): Decoration[] {
+  const axisLength = axis === "x" ? dimensions.width : dimensions.depth;
+  if (!Number.isFinite(centimeters) || !Number.isFinite(axisLength) || axisLength <= 0) return decorations;
+  const clampedCentimeters = Math.min(axisLength, Math.max(0, centimeters));
+  const normalizedPosition = clampedCentimeters * 2 / axisLength - 1;
+  return decorations.map((item) => item.id === id
+    ? { ...item, position: { ...item.position, [axis]: normalizedPosition } }
+    : item);
+}
+
+export function resizeDecoration(decorations: Decoration[], id: number, size: number): Decoration[] {
+  if (!Number.isFinite(size)) return decorations;
+  const normalizedSize = Math.min(150, Math.max(50, size));
+  return decorations.map((item) => item.id === id ? { ...item, size: normalizedSize } : item);
+}
+
 export function isStoredProject(value: unknown, allowedSpecies: readonly string[]): value is StoredProject {
   if (typeof value !== "object" || value === null) return false;
   const project = value as Record<string, unknown>;
@@ -82,7 +105,8 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
       ["Plante", "Cachette", "Roche"].includes(decoration.kind as string) &&
       typeof position === "object" && position !== null &&
       typeof (position as Record<string, unknown>).x === "number" &&
-      typeof (position as Record<string, unknown>).z === "number";
+      typeof (position as Record<string, unknown>).z === "number" &&
+      (decoration.size === undefined || (typeof decoration.size === "number" && Number.isFinite(decoration.size) && decoration.size >= 50 && decoration.size <= 150));
   });
   const measurements = project.measurements;
   const isValidLifeStage = project.lifeStage === undefined || project.lifeStage === "juvenile" || project.lifeStage === "adult";

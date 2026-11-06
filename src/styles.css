@@ -92,16 +92,27 @@ h1, h2, p { margin-top: 0; }
 .decor-tools button > svg:first-child { color: #98a495; }
 .rock-icon { display: inline-block; width: 11px; height: 9px; background: #a69783; clip-path: polygon(18% 0, 83% 12%, 100% 100%, 0 100%); }
 .decor-list { display: grid; gap: 2px; margin-top: 9px; }
-.decor-item { min-height: 32px; display: flex; align-items: center; gap: 8px; font-size: 10px; color: #56655a; }
+.decor-item { min-width: 0; display: grid; grid-template-columns: 22px minmax(0, 1fr) 24px; align-items: start; gap: 8px; padding: 7px 4px; font-size: 10px; color: #56655a; }
 .decor-item.selected { background: #f3f6ef; border-radius: 4px; }
 .decor-label { min-width: 0; display: grid; gap: 2px; cursor: pointer; }
 .decor-item small { color: #aab2a9; font-size: 8px; margin-left: 4px; }
 .decor-position { display: block; margin-left: 0 !important; color: #89948a !important; line-height: 1.35; overflow-wrap: anywhere; }
+.decor-editor { display: grid; gap: 7px; min-width: 0; }
+.decor-item-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; }
+.decor-item-heading > span { min-width: 0; color: #56655a; font-size: 10px; }
+.decor-item-heading .decor-position { flex: 0 0 auto; font-size: 8px; }
+.decor-coordinate-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.decor-coordinate-grid label { display: grid; gap: 3px; min-width: 0; color: #89948a; font-size: 8px; }
+.decor-coordinate-grid input { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid #e6e9e1; border-radius: 4px; background: #fff; color: #354238; font-size: 10px; }
+.decor-size-control { display: grid; gap: 2px; min-width: 0; color: #89948a; font-size: 8px; }
+.decor-size-control > span { display: flex; justify-content: space-between; gap: 6px; }
+.decor-size-control output { color: #526553; font-weight: 600; }
+.decor-size-control input { width: 100%; height: 14px; margin: 0; accent-color: #557358; cursor: ew-resize; }
 .viewport[data-mode="plan"] canvas { cursor: grab; touch-action: none; }
 .viewport[data-mode="plan"] canvas:active { cursor: grabbing; }
 .decor-swatch { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; }
 .swatch-plante { background: #edf3e8; color: #6a8a62; }.swatch-cachette { background: #f3eee6; color: #927d61; }.swatch-roche { background: #efefeb; }
-.remove-button { margin-left: auto; border: 0; background: transparent; color: #abb3aa; padding: 4px; display: grid; place-items: center; cursor: pointer; }
+.remove-button { justify-self: center; border: 0; background: transparent; color: #abb3aa; padding: 4px; display: grid; place-items: center; cursor: pointer; }
 .remove-button:hover { color: #8d5f4f; }
 .empty-decor { color: #a0a99f; font-size: 10px; padding: 5px 0 0; margin: 0; }
 .species-section { border-bottom: 0; padding-bottom: 4px; }
