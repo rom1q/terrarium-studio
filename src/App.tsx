@@ -24,41 +24,28 @@ import {
   Waves,
   X,
 } from "lucide-react";
+import {
+  calculateProjectChecks,
+  isStoredProject,
+  parseProjectExport,
+  PROJECT_EXPORT_FORMAT,
+  removeSavedProjectRecord,
+  renameSavedProjectRecord,
+  type Biotope,
+  type CheckStatus,
+  type Decoration,
+  type MeasurementKey,
+  type Measurements,
+  type ProjectExport,
+  type Shape,
+  type SpeciesProfile,
+  type StoredProject,
+} from "./projectLogic";
 
-type Shape = "Basse" | "Cubique" | "Verticale";
-type Biotope = "Désertique" | "Tropical" | "Paludarium";
-type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche"; position: { x: number; z: number } };
-type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
-type Measurements = { hotSideTemperature: number | null; coolSideTemperature: number | null; baskingUvi: number | null; coolSideHumidity: number | null };
-type MeasurementKey = keyof Measurements;
-type ReferenceRanges = Partial<Record<MeasurementKey, readonly [number, number]>>;
-type CheckStatus = "met" | "insufficient" | "attention" | "unknown";
 type SaveStatus = "idle" | "pending" | "saved" | "error";
-type SpeciesProfile = {
-  label: string;
-  scientificName: string;
-  commonName: string;
-  source: SpeciesSource | null;
-  minimumDimensions: { width: number; depth: number; height: number } | null;
-  referenceRanges: ReferenceRanges | null;
-  hidesAtBothEnds: boolean | null;
-};
-type StoredProject = {
-  id: string;
-  name: string;
-  shape: Shape;
-  biotope: Biotope;
-  dimensions: { width: number; depth: number; height: number };
-  species: string;
-  decorations: Decoration[];
-  nextId: number;
-  measurements?: Measurements;
-};
-type ProjectExport = { format: "terrarium-studio-project"; version: 1; exportedAt: string; project: StoredProject };
 
 const projectsStorageKey = "terrarium-studio-projects";
 const currentProjectStorageKey = "terrarium-studio-current-project";
-const projectExportFormat = "terrarium-studio-project";
 
 const speciesList: SpeciesProfile[] = [
   {
@@ -113,6 +100,7 @@ const speciesList: SpeciesProfile[] = [
     hidesAtBothEnds: null,
   },
 ];
+const speciesLabels = speciesList.map((species) => species.label);
 
 const biotopeColors: Record<Biotope, { ground: number; plant: number; water: number }> = {
   Désertique: { ground: 0xcda875, plant: 0x74884b, water: 0x8dbdc1 },
@@ -133,63 +121,12 @@ const createDefaultMeasurements = (): Measurements => ({
   coolSideHumidity: null,
 });
 
-function isStoredProject(value: unknown): value is StoredProject {
-  if (typeof value !== "object" || value === null) return false;
-  const project = value as Record<string, unknown>;
-  const dimensions = project.dimensions;
-  const isValidDimensions = typeof dimensions === "object" && dimensions !== null &&
-    ["width", "depth", "height"].every((key) => {
-      const dimension = (dimensions as Record<string, unknown>)[key];
-      return typeof dimension === "number" && Number.isFinite(dimension);
-    });
-  const isValidDecorations = Array.isArray(project.decorations) && project.decorations.every((item) => {
-    if (typeof item !== "object" || item === null) return false;
-    const decoration = item as Record<string, unknown>;
-    const position = decoration.position;
-    return Number.isInteger(decoration.id) &&
-      ["Plante", "Cachette", "Roche"].includes(decoration.kind as string) &&
-      typeof position === "object" && position !== null &&
-      typeof (position as Record<string, unknown>).x === "number" &&
-      typeof (position as Record<string, unknown>).z === "number";
-  });
-  const measurements = project.measurements;
-  const isValidMeasurements = measurements === undefined || (
-    typeof measurements === "object" && measurements !== null &&
-    (["hotSideTemperature", "coolSideTemperature", "baskingUvi", "coolSideHumidity"] as const).every((key) => {
-      const measurement = (measurements as Record<string, unknown>)[key];
-      return measurement === null || (typeof measurement === "number" && Number.isFinite(measurement));
-    })
-  );
-
-  return typeof project.id === "string" && typeof project.name === "string" &&
-    ["Basse", "Cubique", "Verticale"].includes(project.shape as string) &&
-    ["Désertique", "Tropical", "Paludarium"].includes(project.biotope as string) &&
-    isValidDimensions && typeof project.species === "string" && speciesList.some((species) => species.label === project.species) &&
-    isValidDecorations && isValidMeasurements && Number.isInteger(project.nextId);
-}
-
-function parseProjectExport(value: unknown): StoredProject | null {
-  if (typeof value !== "object" || value === null) return null;
-  const envelope = value as Record<string, unknown>;
-  if (envelope.format !== projectExportFormat || envelope.version !== 1 || typeof envelope.exportedAt !== "string" || Number.isNaN(Date.parse(envelope.exportedAt))) return null;
-  if (!isStoredProject(envelope.project)) return null;
-
-  const project = envelope.project;
-  const dimensions = Object.values(project.dimensions);
-  const decorationIds = project.decorations.map((item) => item.id);
-  const validDimensions = dimensions.every((dimension) => dimension >= 0 && dimension <= 1000);
-  const validPositions = project.decorations.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.z) && Math.abs(item.position.x) <= 1 && Math.abs(item.position.z) <= 1);
-  const validIds = decorationIds.every((id) => id > 0) && new Set(decorationIds).size === decorationIds.length && project.nextId > Math.max(0, ...decorationIds);
-  if (!validDimensions || !validPositions || !validIds || !project.name.trim() || project.name.length > 60) return null;
-  return project;
-}
-
 function readCurrentProject(): StoredProject | null {
   try {
     const value = localStorage.getItem(currentProjectStorageKey);
     if (!value) return null;
     const project: unknown = JSON.parse(value);
-    return isStoredProject(project) ? project : null;
+    return isStoredProject(project, speciesLabels) ? project : null;
   } catch {
     return null;
   }
@@ -200,7 +137,7 @@ function readSavedProjects(): StoredProject[] {
     const value = localStorage.getItem(projectsStorageKey);
     if (!value) return [];
     const projects: unknown = JSON.parse(value);
-    return Array.isArray(projects) ? projects.filter(isStoredProject) : [];
+    return Array.isArray(projects) ? projects.filter((project): project is StoredProject => isStoredProject(project, speciesLabels)) : [];
   } catch {
     return [];
   }
@@ -593,32 +530,26 @@ function App() {
   };
 
   const renameSavedProject = (id: string, name: string) => {
-    const normalizedName = name.trim();
-    if (!normalizedName) {
-      setProjectDialogError("Le nom du projet ne peut pas être vide.");
+    const result = renameSavedProjectRecord(savedProjects, id, name);
+    if (!result.ok) {
+      setProjectDialogError(result.reason === "empty-name" ? "Le nom du projet ne peut pas être vide." : result.reason === "duplicate-name" ? "Un projet porte déjà ce nom." : "Ce projet n’existe plus.");
       return;
     }
-    if (savedProjects.some((project) => project.id !== id && project.name.toLocaleLowerCase() === normalizedName.toLocaleLowerCase())) {
-      setProjectDialogError("Un projet porte déjà ce nom.");
-      return;
-    }
-    const existing = savedProjects.find((project) => project.id === id);
-    if (!existing) return;
+    const { project: renamedProject, projects } = result;
     const isCurrentProject = projectId === id;
-    const renamedProject: StoredProject = isCurrentProject
-      ? { id, name: normalizedName, shape, biotope, dimensions, species, decorations, nextId, measurements }
-      : { ...existing, name: normalizedName };
-    const projects = savedProjects.map((project) => project.id === id ? renamedProject : project);
-    if (!writeProjectCollection(projects, isCurrentProject ? renamedProject : undefined)) {
+    const currentProject = isCurrentProject
+      ? { ...renamedProject, shape, biotope, dimensions, species, decorations, nextId, measurements }
+      : renamedProject;
+    if (!writeProjectCollection(projects, isCurrentProject ? currentProject : undefined)) {
       setProjectDialogError("Impossible d’enregistrer le nouveau nom sur cet appareil.");
       return;
     }
 
     setSavedProjects(projects);
     if (isCurrentProject) {
-      const serializedProject = JSON.stringify(renamedProject);
+      const serializedProject = JSON.stringify(currentProject);
       lastSavedProjectRef.current = serializedProject;
-      setProjectName(normalizedName);
+      setProjectName(currentProject.name);
       setSaveStatus("saved");
     }
     closeProjectNameDialog();
@@ -633,7 +564,7 @@ function App() {
       : `Supprimer définitivement la sauvegarde « ${project.name} » ?`;
     if (!window.confirm(message)) return;
 
-    const projects = savedProjects.filter((saved) => saved.id !== project.id);
+    const projects = removeSavedProjectRecord(savedProjects, project.id);
     if (!writeProjectCollection(projects, isCurrentProject ? null : undefined)) {
       setSaveStatus("error");
       setSaveFeedback("Impossible de supprimer la sauvegarde sur cet appareil");
@@ -710,7 +641,7 @@ function App() {
       nextId,
       measurements,
     };
-    const exportData: ProjectExport = { format: projectExportFormat, version: 1, exportedAt: new Date().toISOString(), project };
+    const exportData: ProjectExport = { format: PROJECT_EXPORT_FORMAT, version: 1, exportedAt: new Date().toISOString(), project };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -731,7 +662,7 @@ function App() {
     let importedProject: StoredProject | null = null;
     try {
       if (file.size > 1_000_000) throw new Error("Project file is too large");
-      importedProject = parseProjectExport(JSON.parse(await file.text()) as unknown);
+      importedProject = parseProjectExport(JSON.parse(await file.text()) as unknown, speciesLabels);
     } catch {
       importedProject = null;
     }
@@ -838,51 +769,7 @@ function App() {
   };
 
   const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
-  const minimumDimensions = selectedSpecies.minimumDimensions;
-  const dimensionsMeetMinimum = minimumDimensions !== null &&
-    dimensions.width >= minimumDimensions.width &&
-    dimensions.depth >= minimumDimensions.depth &&
-    dimensions.height >= minimumDimensions.height;
-  const hasHideAtLeftEnd = decorations.some((item) => item.kind === "Cachette" && item.position.x <= -0.5);
-  const hasHideAtRightEnd = decorations.some((item) => item.kind === "Cachette" && item.position.x >= 0.5);
-  const hideEndCount = Number(hasHideAtLeftEnd) + Number(hasHideAtRightEnd);
-  const hidingCheck: { label: string; status: CheckStatus; detail: string } = selectedSpecies.hidesAtBothEnds === null
-    ? { label: "Cachettes aux deux extrémités", status: "unknown", detail: "Non documenté" }
-    : {
-      label: "Cachettes aux deux extrémités",
-      status: hideEndCount === 2 ? "met" : "insufficient",
-      detail: hideEndCount === 2 ? "2/2 extrémités couvertes" : `${hideEndCount}/2 extrémités · cachette manquante dans le quart ${hasHideAtLeftEnd ? "droit" : "gauche"}`,
-    };
-  const rangeCheck = (label: string, key: MeasurementKey, unit: string): { label: string; status: CheckStatus; detail: string } => {
-    const range = selectedSpecies.referenceRanges?.[key];
-    const value = measurements[key];
-    if (!range) return { label, status: "unknown", detail: "Non documenté" };
-    const rangeLabel = `${range[0]}–${range[1]} ${unit}`;
-    if (value === null) return { label, status: "unknown", detail: `À mesurer · repère ${rangeLabel}` };
-    const isInRange = value >= range[0] && value <= range[1];
-    return {
-      label,
-      status: isInRange ? "met" : "attention",
-      detail: `${value} ${unit} · ${isInRange ? "dans la plage" : "hors plage"} ${rangeLabel}`,
-    };
-  };
-  const checks: { label: string; status: CheckStatus; detail: string }[] = [
-    {
-      label: "Dimensions minimales",
-      status: minimumDimensions === null ? "unknown" : dimensionsMeetMinimum ? "met" : "insufficient",
-      detail: minimumDimensions === null ? "Non documenté" : `${dimensionsMeetMinimum ? "Respecté" : "Insuffisant"} · min. ${minimumDimensions.width} × ${minimumDimensions.depth} × ${minimumDimensions.height} cm`,
-    },
-    rangeCheck("Zone chaude", "hotSideTemperature", "°C"),
-    rangeCheck("Zone fraîche", "coolSideTemperature", "°C"),
-    rangeCheck("UVI zone de basking", "baskingUvi", "UVI"),
-    rangeCheck("Humidité côté frais", "coolSideHumidity", "%"),
-    hidingCheck,
-    { label: "Autre enrichissement", status: "unknown", detail: "Non documenté" },
-  ];
-  const hasInsufficientCheck = checks.some((check) => check.status === "insufficient");
-  const hasAttentionCheck = checks.some((check) => check.status === "attention");
-  const allChecksDocumented = checks.every((check) => check.status !== "unknown");
-  const overallStatus = hasInsufficientCheck ? "Repères à compléter" : hasAttentionCheck ? "Mesure à vérifier" : allChecksDocumented ? "Dans les repères consultés" : "À documenter";
+  const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, decorations, measurements });
   const checkStatusLabels: Record<CheckStatus, string> = {
     met: "Repère atteint",
     insufficient: "À compléter",

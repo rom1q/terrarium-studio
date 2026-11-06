@@ -21,6 +21,12 @@ Pour vérifier le build de production :
 npm run build
 ```
 
+Pour lancer les tests unitaires :
+
+```powershell
+npm test
+```
+
 ## Pistes de développement
 
 - Ajouter des paramètres de placement et une sauvegarde de projets.
