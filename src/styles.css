@@ -32,7 +32,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .project-menu summary { list-style: none; cursor: pointer; }
 .project-menu summary::-webkit-details-marker { display: none; }
 .project-dropdown { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: min(270px, calc(100vw - 24px)); max-height: min(320px, 70vh); overflow: auto; padding: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: 5px; box-shadow: 0 12px 30px #29372f1c; }
-.project-dropdown button { width: 100%; border: 0; border-radius: 3px; padding: 9px 10px; text-align: left; background: transparent; color: var(--ink); font-size: 11px; cursor: pointer; }
+.project-dropdown button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 3px; padding: 9px 10px; text-align: left; background: transparent; color: var(--ink); font-size: 11px; cursor: pointer; }
 .project-dropdown button:hover { background: var(--soft-green); }
 .project-list-label { padding: 9px 10px 5px; color: #929b91; font-size: 8px; font-weight: 700; }
 .no-saved-projects { margin: 0; padding: 6px 10px 9px; color: var(--muted); font-size: 10px; }
@@ -212,6 +212,7 @@ h1, h2, p { margin-top: 0; }
   .topbar { height: 58px; flex-basis: 58px; padding: 0 13px; grid-template-columns: 1fr auto auto; }
   .brand { font-size: 15px; }.project-name { display: flex; padding: 7px; gap: 0; font-size: 0; }.save-button { padding: 8px 10px; font-size: 10px; }
   .topbar-actions { gap: 6px; }.save-feedback { position: absolute; right: 12px; top: 62px; z-index: 2; }
+  .project-dropdown { left: 50%; transform: translateX(-50%); }
   .workspace { display: flex; flex-direction: column; padding: 10px; gap: 10px; }
   .stage-column { order: -1; min-height: 440px; }.stage-toolbar { height: 38px; }.viewport-wrap { min-height: 360px; }
   .left-panel, .right-panel { max-height: none; }.left-panel { padding: 17px 15px; }.right-panel { display: flex; padding: 17px 15px; }

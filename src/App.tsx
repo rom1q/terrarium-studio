@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   CircleHelp,
+  Download,
   Expand,
   Eye,
   FileText,
@@ -17,6 +18,7 @@ import {
   ShieldCheck,
   Sprout,
   Sun,
+  Upload,
   Waves,
   X,
 } from "lucide-react";
@@ -50,9 +52,11 @@ type StoredProject = {
   nextId: number;
   measurements?: Measurements;
 };
+type ProjectExport = { format: "terrarium-studio-project"; version: 1; exportedAt: string; project: StoredProject };
 
 const projectsStorageKey = "terrarium-studio-projects";
 const currentProjectStorageKey = "terrarium-studio-current-project";
+const projectExportFormat = "terrarium-studio-project";
 
 const speciesList: SpeciesProfile[] = [
   {
@@ -162,6 +166,22 @@ function isStoredProject(value: unknown): value is StoredProject {
     isValidDecorations && isValidMeasurements && Number.isInteger(project.nextId);
 }
 
+function parseProjectExport(value: unknown): StoredProject | null {
+  if (typeof value !== "object" || value === null) return null;
+  const envelope = value as Record<string, unknown>;
+  if (envelope.format !== projectExportFormat || envelope.version !== 1 || typeof envelope.exportedAt !== "string" || Number.isNaN(Date.parse(envelope.exportedAt))) return null;
+  if (!isStoredProject(envelope.project)) return null;
+
+  const project = envelope.project;
+  const dimensions = Object.values(project.dimensions);
+  const decorationIds = project.decorations.map((item) => item.id);
+  const validDimensions = dimensions.every((dimension) => dimension >= 0 && dimension <= 1000);
+  const validPositions = project.decorations.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.z) && Math.abs(item.position.x) <= 1 && Math.abs(item.position.z) <= 1);
+  const validIds = decorationIds.every((id) => id > 0) && new Set(decorationIds).size === decorationIds.length && project.nextId > Math.max(0, ...decorationIds);
+  if (!validDimensions || !validPositions || !validIds || !project.name.trim() || project.name.length > 60) return null;
+  return project;
+}
+
 function readCurrentProject(): StoredProject | null {
   try {
     const value = localStorage.getItem(currentProjectStorageKey);
@@ -187,6 +207,7 @@ function readSavedProjects(): StoredProject[] {
 function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const projectMenuRef = useRef<HTMLDetailsElement>(null);
+  const projectImportInputRef = useRef<HTMLInputElement>(null);
   const [initialProject] = useState<StoredProject | null>(readCurrentProject);
   const lastSavedProjectRef = useRef<string | null>(initialProject ? JSON.stringify(initialProject) : null);
   const [projectId, setProjectId] = useState(initialProject?.id ?? null);
@@ -574,6 +595,107 @@ function App() {
     setShowSaveDialog(true);
   };
 
+  const exportProject = () => {
+    const project: StoredProject = {
+      id: projectId ?? globalThis.crypto.randomUUID(),
+      name: projectName.trim() || "Habitat sans titre",
+      shape,
+      biotope,
+      dimensions,
+      species,
+      decorations,
+      nextId,
+      measurements,
+    };
+    const exportData: ProjectExport = { format: projectExportFormat, version: 1, exportedAt: new Date().toISOString(), project };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const fileName = project.name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]+/g, "-") || "terrarium";
+    link.href = url;
+    link.download = `${fileName}.terrarium.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setSaveFeedback("Export JSON téléchargé");
+    window.setTimeout(() => setSaveFeedback(""), 2200);
+  };
+
+  const importProjectFile = async (file: File | undefined) => {
+    if (!file) return;
+
+    let importedProject: StoredProject | null = null;
+    try {
+      if (file.size > 1_000_000) throw new Error("Project file is too large");
+      importedProject = parseProjectExport(JSON.parse(await file.text()) as unknown);
+    } catch {
+      importedProject = null;
+    }
+    if (!importedProject) {
+      setSaveStatus("error");
+      setSaveFeedback("Fichier JSON invalide ou version non prise en charge");
+      return;
+    }
+
+    const existingProjects = readSavedProjects();
+    const importedBaseName = importedProject.name;
+    let importedName = importedBaseName;
+    let duplicateIndex = 1;
+    while (existingProjects.some((saved) => saved.name === importedName)) {
+      importedName = `${importedBaseName} (importé ${duplicateIndex})`;
+      duplicateIndex += 1;
+    }
+    const project: StoredProject = {
+      ...importedProject,
+      id: globalThis.crypto.randomUUID(),
+      name: importedName,
+      dimensions: { ...importedProject.dimensions },
+      decorations: importedProject.decorations.map((item) => ({ ...item, position: { ...item.position } })),
+      measurements: importedProject.measurements ?? createDefaultMeasurements(),
+    };
+    const projects = [...existingProjects, project];
+    const serializedProject = JSON.stringify(project);
+    const previousProjects = localStorage.getItem(projectsStorageKey);
+    const previousCurrentProject = localStorage.getItem(currentProjectStorageKey);
+    try {
+      localStorage.setItem(projectsStorageKey, JSON.stringify(projects));
+      localStorage.setItem(currentProjectStorageKey, serializedProject);
+    } catch {
+      try {
+        if (previousProjects === null) localStorage.removeItem(projectsStorageKey);
+        else localStorage.setItem(projectsStorageKey, previousProjects);
+        if (previousCurrentProject === null) localStorage.removeItem(currentProjectStorageKey);
+        else localStorage.setItem(currentProjectStorageKey, previousCurrentProject);
+      } catch {
+        setSaveStatus("error");
+        setSaveFeedback("Impossible de restaurer le stockage local");
+        return;
+      }
+      setSaveStatus("error");
+      setSaveFeedback("Stockage local indisponible");
+      return;
+    }
+
+    lastSavedProjectRef.current = serializedProject;
+    setProjectId(project.id);
+    setProjectName(project.name);
+    setShape(project.shape);
+    setBiotope(project.biotope);
+    setDimensions(project.dimensions);
+    setSpecies(project.species);
+    setDecorations(project.decorations);
+    setNextId(project.nextId);
+    setMeasurements(project.measurements ?? createDefaultMeasurements());
+    setSelectedDecorationId(null);
+    setViewMode("3d");
+    setSavedProjects(projects);
+    setSaveStatus("saved");
+    setSaveFeedback("Projet importé");
+    window.setTimeout(() => setSaveFeedback(""), 2200);
+    projectMenuRef.current?.removeAttribute("open");
+  };
+
   const loadProject = (project: StoredProject) => {
     lastSavedProjectRef.current = JSON.stringify(project);
     setProjectId(project.id);
@@ -682,13 +804,16 @@ function App() {
         <details className="project-menu" ref={projectMenuRef}>
           <summary className="project-name"><span className="live-dot" /> {projectName} <ChevronDown size={14} /></summary>
           <div className="project-dropdown">
-            <button type="button" className="new-project-option" onClick={startNewProject}>Nouveau projet</button>
+            <button type="button" className="new-project-option" onClick={startNewProject}><Plus size={14} /> Nouveau projet</button>
+            <button type="button" onClick={exportProject}><Download size={14} /> Exporter en JSON</button>
+            <button type="button" onClick={() => projectImportInputRef.current?.click()}><Upload size={14} /> Importer un JSON</button>
             <div className="project-list-label">Projets enregistrés</div>
             {savedProjects.length === 0 ? <p className="no-saved-projects">Aucun projet enregistré</p> : savedProjects.map((project) => (
               <button type="button" className="saved-project-option" key={project.id} onClick={() => loadProject(project)}>{project.name}</button>
             ))}
           </div>
         </details>
+        <input ref={projectImportInputRef} className="sr-only" type="file" accept=".json,application/json" aria-label="Fichier de projet JSON" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void importProjectFile(file); }} />
         <div className="topbar-actions">
           <button className="icon-button" type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={17} /></button>
           <button className="save-button" type="button" onClick={saveProject}>Enregistrer le projet</button>
