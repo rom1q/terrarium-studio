@@ -8,8 +8,10 @@ import {
   CircleHelp,
   Expand,
   Eye,
+  FileText,
   Leaf,
   Plus,
+  Printer,
   RotateCcw,
   Ruler,
   ShieldCheck,
@@ -180,6 +182,7 @@ function App() {
   const [savedProjects, setSavedProjects] = useState<StoredProject[]>(readSavedProjects);
   const [saveFeedback, setSaveFeedback] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [draftProjectName, setDraftProjectName] = useState("");
   const [shape, setShape] = useState<Shape>(initialProject?.shape ?? "Basse");
   const [biotope, setBiotope] = useState<Biotope>(initialProject?.biotope ?? "Tropical");
@@ -605,6 +608,12 @@ function App() {
   const hasAttentionCheck = checks.some((check) => check.status === "attention");
   const allChecksDocumented = checks.every((check) => check.status !== "unknown");
   const overallStatus = hasInsufficientCheck ? "Repères à compléter" : hasAttentionCheck ? "Mesure à vérifier" : allChecksDocumented ? "Dans les repères consultés" : "À documenter";
+  const checkStatusLabels: Record<CheckStatus, string> = {
+    met: "Repère atteint",
+    insufficient: "À compléter",
+    attention: "À vérifier",
+    unknown: "Non documenté",
+  };
 
   const updateMeasurement = (key: MeasurementKey, value: string) => {
     const numericValue = value === "" ? null : Number(value);
@@ -749,7 +758,7 @@ function App() {
           {checks.map((check) => <div className="check-row" key={check.label}><span className={`check-icon ${check.status}`}>{check.status === "met" ? <Check size={14} /> : check.status === "insufficient" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span><span>{check.label}</span><small>{check.detail}</small></div>)}
           <div className="report-note"><AlertTriangle size={15} /><p>Les repères affichés sont partiels et ne certifient pas un habitat. Consultez la source complète et un vétérinaire spécialisé avant toute décision.</p></div>
           <div className="habitat-summary"><p className="field-label">RÉCAPITULATIF</p><div><span>Type</span><strong>{biotope}</strong></div><div><span>Volume</span><strong>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</strong></div><div><span>Décor</span><strong>{decorations.length} éléments</strong></div></div>
-          <button className="review-button" type="button" onClick={() => window.alert("Le bilan est consultable dans ce panneau. L’export du rapport avec l’historique des mesures n’est pas encore disponible.")}>Voir le rapport <ChevronDown size={15} className="rotate-icon" /></button>
+          <button className="review-button" type="button" onClick={() => setShowReport(true)}><FileText size={15} /> Voir le rapport</button>
         </aside>
       </section>
       <footer className="app-footer"><span>PROTOTYPE · CONFIGURATEUR D'HABITAT</span><span>Terrarium Studio <span className="footer-separator">/</span> v0.1</span></footer>
@@ -764,6 +773,32 @@ function App() {
               <button type="submit" className="save-button">Enregistrer</button>
             </div>
           </form>
+        </div>
+      )}
+      {showReport && (
+        <div className="dialog-backdrop report-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowReport(false); }}>
+          <section className="project-report" role="dialog" aria-modal="true" aria-labelledby="report-title">
+            <header className="report-header">
+              <div><p className="eyebrow">RAPPORT D'HABITAT · {new Date().toLocaleDateString("fr-FR")}</p><h2 id="report-title">{projectName}</h2><p>{selectedSpecies.commonName} · <i>{selectedSpecies.scientificName}</i></p></div>
+              <button type="button" className="report-close" aria-label="Fermer le rapport" autoFocus onClick={() => setShowReport(false)}><X size={17} /></button>
+            </header>
+            <dl className="report-facts">
+              <div><dt>Dimensions intérieures</dt><dd>{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</dd></div>
+              <div><dt>Biotope et format</dt><dd>{biotope} · {shape.toLowerCase()}</dd></div>
+              <div><dt>Volume estimé</dt><dd>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</dd></div>
+              <div><dt>Statut du bilan</dt><dd>{overallStatus}</dd></div>
+            </dl>
+            <h3>Critères et relevés</h3>
+            <div className="report-checks">
+              {checks.map((check) => <div className="report-check" key={check.label}>
+                <span className={`check-icon ${check.status}`}>{check.status === "met" ? <Check size={14} /> : check.status === "insufficient" || check.status === "attention" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span>
+                <strong>{check.label}</strong><span className={`report-check-status ${check.status}`}>{checkStatusLabels[check.status]}</span><p>{check.detail}</p>
+              </div>)}
+            </div>
+            <section className="report-reference"><h3>Référence consultée</h3>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><p>Consultée le {selectedSpecies.source.checkedAt}. Les repères ne remplacent pas le guide complet.</p></> : <p>Aucune référence de maintenance vérifiée pour cette espèce.</p>}</section>
+            <p className="report-disclaimer">Ce bilan est partiel; les critères non documentés ne sont pas considérés comme conformes. Il ne certifie pas un habitat et ne remplace pas l’avis d’un vétérinaire spécialisé.</p>
+            <div className="report-actions"><button type="button" className="cancel-button" onClick={() => setShowReport(false)}>Fermer</button><button type="button" className="save-button" onClick={() => window.print()}><Printer size={15} /> Imprimer / PDF</button></div>
+          </section>
         </div>
       )}
     </main>
