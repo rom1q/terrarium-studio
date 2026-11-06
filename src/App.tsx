@@ -98,7 +98,6 @@ function App() {
     });
     const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x414f43, roughness: 0.36 });
     const groundMaterial = new THREE.MeshStandardMaterial({ color: colors.ground, roughness: 0.94 });
-    const plantMaterial = new THREE.MeshStandardMaterial({ color: colors.plant, roughness: 0.72 });
     const widthHalf = width / 2;
     const depthHalf = depth / 2;
 
