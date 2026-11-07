@@ -8,6 +8,7 @@ import {
   Download,
   Eye,
   FileText,
+  History,
   Layers,
   Leaf,
   Plus,
@@ -110,6 +111,7 @@ function App() {
   const [projectDialogError, setProjectDialogError] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [draftProjectName, setDraftProjectName] = useState("");
+  const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
   const [projectHistory, dispatchProjectHistory] = useReducer(projectHistoryReducer, {
     shape: initialProject?.shape ?? "Basse",
     biotope: initialBiotope,
@@ -119,20 +121,21 @@ function App() {
     measurements: initialProject?.measurements ?? createDefaultMeasurements(),
     decorations: initialProject?.decorations ?? createDefaultDecorations(),
     nextId: initialProject?.nextId ?? 4,
-  }, createProjectHistory);
-  const { shape, biotope, dimensions, species, lifeStage, measurements, decorations, nextId } = projectHistory.present;
-  const updateProjectHistory = (update: (current: EditableProjectState) => EditableProjectState, groupKey?: string) => {
-    dispatchProjectHistory({ type: "set", update, ...(groupKey ? { groupKey } : {}) });
+  }, (project) => createProjectHistory(project, initialProject ? "Projet chargé" : "Projet initial"));
+  const currentProjectHistoryEntry = projectHistory.entries[projectHistory.cursor];
+  const { shape, biotope, dimensions, species, lifeStage, measurements, decorations, nextId } = currentProjectHistoryEntry.project;
+  const updateProjectHistory = (update: (current: EditableProjectState) => EditableProjectState, groupKey?: string, label = "Modifier le projet") => {
+    dispatchProjectHistory({ type: "set", update, label, ...(groupKey ? { groupKey } : {}) });
   };
-  const replaceProjectState = (project: EditableProjectState) => dispatchProjectHistory({ type: "replace", project });
+  const replaceProjectState = (project: EditableProjectState, label = "Projet chargé") => dispatchProjectHistory({ type: "replace", project, label });
   const finishProjectHistoryGroup = () => dispatchProjectHistory({ type: "finish-group" });
-  const setShape = (value: Shape) => updateProjectHistory((current) => ({ ...current, shape: value }));
-  const setBiotope = (value: Biotope) => updateProjectHistory((current) => ({ ...current, biotope: value }));
-  const setLifeStage = (value: LifeStage) => updateProjectHistory((current) => ({ ...current, lifeStage: value }));
+  const setShape = (value: Shape) => updateProjectHistory((current) => ({ ...current, shape: value }), undefined, `Format : ${value}`);
+  const setBiotope = (value: Biotope) => updateProjectHistory((current) => ({ ...current, biotope: value }), undefined, `Biotope : ${value}`);
+  const setLifeStage = (value: LifeStage) => updateProjectHistory((current) => ({ ...current, lifeStage: value }), undefined, `Stade de vie : ${value === "adult" ? "adulte" : "juvénile"}`);
   const setDecorations: Dispatch<SetStateAction<Decoration[]>> = (update) => updateProjectHistory((current) => ({
     ...current,
     decorations: typeof update === "function" ? update(current.decorations) : update,
-  }));
+  }), undefined, "Modifier le décor");
   const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
   const habitatZoneGuidance = getHabitatZoneGuidance(selectedSpecies);
   const [showHabitatZones, setShowHabitatZones] = useState(false);
@@ -142,8 +145,8 @@ function App() {
   const [activeLayoutWarningId, setActiveLayoutWarningId] = useState<string | null>(null);
   const [previewedLayoutSuggestion, setPreviewedLayoutSuggestion] = useState<LayoutSuggestion | null>(null);
   const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
-  const canUndoProject = projectHistory.past.length > 0;
-  const canRedoProject = projectHistory.future.length > 0;
+  const canUndoProject = projectHistory.cursor > 0;
+  const canRedoProject = projectHistory.cursor < projectHistory.entries.length - 1;
   const selectDecoration = (id: number | null) => {
     selectedDecorationIdRef.current = id;
     setSelectedDecorationId(id);
@@ -205,14 +208,15 @@ function App() {
   const updateDimension = (key: keyof typeof dimensions, value: string) => {
     const numericValue = Number(value);
     if (Number.isFinite(numericValue)) {
-      updateProjectHistory((current) => ({ ...current, dimensions: { ...current.dimensions, [key]: numericValue } }), `dimension:${key}`);
+      const label = key === "width" ? "Largeur" : key === "depth" ? "Profondeur" : "Hauteur";
+      updateProjectHistory((current) => ({ ...current, dimensions: { ...current.dimensions, [key]: numericValue } }), `dimension:${key}`, `${label} : ${numericValue} cm`);
     }
   };
 
   const updateSpecies = (speciesLabel: string) => {
     const nextSpecies = speciesList.find((item) => item.label === speciesLabel) ?? speciesList[0];
     const nextBiotope = resolveBiotopeSelection(nextSpecies, biotope);
-    updateProjectHistory((current) => ({ ...current, species: speciesLabel, biotope: nextBiotope }));
+    updateProjectHistory((current) => ({ ...current, species: speciesLabel, biotope: nextBiotope }), undefined, `Espèce : ${nextSpecies.commonName}`);
     if (nextBiotope !== biotope) {
       setSaveFeedback(`Biotope adapté : ${nextBiotope}`);
       window.setTimeout(() => setSaveFeedback(""), 2200);
@@ -235,29 +239,32 @@ function App() {
         decorations: [...current.decorations, { id: current.nextId, kind, variant: getDefaultDecorationVariant(kind, current.biotope), position }],
         nextId: current.nextId + 1,
       };
-    });
+    }, undefined, `Ajouter ${kind}`);
   };
 
   const updateDecorationPosition = (id: number, axis: DecorationAxis, value: string) => {
     const centimeters = Number(value);
     if (!Number.isFinite(centimeters)) return;
-    updateProjectHistory((current) => ({ ...current, decorations: positionDecorationAtCm(current.decorations, id, axis, centimeters, current.dimensions) }), `decoration:${id}:${axis}`);
+    updateProjectHistory((current) => ({ ...current, decorations: positionDecorationAtCm(current.decorations, id, axis, centimeters, current.dimensions) }), `decoration:${id}:${axis}`, `Position ${axis.toUpperCase()} : ${centimeters} cm`);
   };
 
   const updateDecorationSize = (id: number, value: string) => {
-    updateProjectHistory((current) => ({ ...current, decorations: resizeDecoration(current.decorations, id, Number(value)) }), `decoration:${id}:size`);
+    updateProjectHistory((current) => ({ ...current, decorations: resizeDecoration(current.decorations, id, Number(value)) }), `decoration:${id}:size`, `Taille du décor : ${value}%`);
   };
 
   const updateDecorationRotation = (id: number, value: string) => {
-    updateProjectHistory((current) => ({ ...current, decorations: rotateDecoration(current.decorations, id, Number(value)) }), `decoration:${id}:rotation`);
+    updateProjectHistory((current) => ({ ...current, decorations: rotateDecoration(current.decorations, id, Number(value)) }), `decoration:${id}:rotation`, `Rotation du décor : ${value}°`);
   };
 
   const updateDecorationVariantChoice = (id: number, variant: string) => {
-    setDecorations((current) => updateDecorationVariant(current, id, variant));
+    const item = decorations.find((decoration) => decoration.id === id);
+    if (!item) return;
+    updateProjectHistory((current) => ({ ...current, decorations: updateDecorationVariant(current.decorations, id, variant) }), undefined, `Variante ${item.kind} : ${variant}`);
   };
 
   const updateBotanicalPlant = (id: number, plantSpeciesId: string) => {
-    setDecorations((current) => setDecorationPlantSpecies(current, id, plantSpeciesId || undefined));
+    const plant = getPlantProfile(plantSpeciesId);
+    updateProjectHistory((current) => ({ ...current, decorations: setDecorationPlantSpecies(current.decorations, id, plantSpeciesId || undefined) }), undefined, `Espèce botanique : ${plant?.commonName ?? "style visuel"}`);
   };
 
   const duplicateSelectedDecoration = () => {
@@ -267,12 +274,13 @@ function App() {
       ...current,
       decorations: duplicateDecoration(current.decorations, id, current.nextId),
       nextId: current.nextId + 1,
-    }));
+    }), undefined, "Dupliquer un décor");
     selectDecoration(nextId);
   };
 
   const removeDecoration = (id: number) => {
-    setDecorations((current) => current.filter((item) => item.id !== id));
+    const item = decorations.find((decoration) => decoration.id === id);
+    updateProjectHistory((current) => ({ ...current, decorations: current.decorations.filter((decoration) => decoration.id !== id) }), undefined, `Supprimer ${item?.kind ?? "un décor"}`);
     if (selectedDecorationId === id) selectDecoration(null);
   };
 
@@ -453,7 +461,7 @@ function App() {
       measurements: project.measurements ?? createDefaultMeasurements(),
       decorations: project.decorations,
       nextId: project.nextId,
-    });
+    }, `Importer : ${project.name}`);
     selectDecoration(null);
     setViewMode("3d");
     setSavedProjects(projects);
@@ -478,7 +486,7 @@ function App() {
       measurements: project.measurements ?? createDefaultMeasurements(),
       decorations: project.decorations,
       nextId: project.nextId,
-    });
+    }, `Ouvrir : ${project.name}`);
     selectDecoration(null);
     setSaveStatus("saved");
     setSaveFeedback("");
@@ -503,7 +511,7 @@ function App() {
       measurements: createDefaultMeasurements(),
       decorations: createDefaultDecorations(),
       nextId: 4,
-    });
+    }, "Nouveau projet");
     selectDecoration(null);
     setViewMode("3d");
     setSaveStatus("idle");
@@ -527,7 +535,7 @@ function App() {
     selectDecoration(suggestion.decorationId);
   };
   const applyLayoutSuggestion = (suggestion: LayoutSuggestion) => {
-    setDecorations((current) => applyDecorationLayoutSuggestion(current, suggestion));
+    updateProjectHistory((current) => ({ ...current, decorations: applyDecorationLayoutSuggestion(current.decorations, suggestion) }), undefined, "Appliquer une correction de placement");
     setActiveLayoutWarningId(null);
     setPreviewedLayoutSuggestion(null);
     selectDecoration(suggestion.decorationId);
@@ -546,7 +554,14 @@ function App() {
   const updateMeasurement = (key: MeasurementKey, value: string) => {
     const numericValue = value === "" ? null : Number(value);
     if (numericValue === null || Number.isFinite(numericValue)) {
-      updateProjectHistory((current) => ({ ...current, measurements: { ...current.measurements, [key]: numericValue } }), `measurement:${key}`);
+      const labels: Record<MeasurementKey, string> = {
+        hotSideTemperature: "Température zone chaude",
+        coolSideTemperature: "Température zone fraîche",
+        baskingUvi: "UVI basking",
+        coolSideHumidity: "Humidité côté frais",
+      };
+      const label = numericValue === null ? `${labels[key]} effacée` : `${labels[key]} : ${numericValue}`;
+      updateProjectHistory((current) => ({ ...current, measurements: { ...current.measurements, [key]: numericValue } }), `measurement:${key}`, label);
     }
   };
 
@@ -687,10 +702,19 @@ function App() {
                 <button type="button" aria-label="Annuler le changement" aria-keyshortcuts="Control+Z Meta+Z" title="Annuler · Ctrl/Cmd+Z" disabled={!canUndoProject} onClick={() => dispatchProjectHistory({ type: "undo" })}><Undo2 size={15} /></button>
                 <button type="button" aria-label="Rétablir le changement" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Rétablir · Ctrl/Cmd+Shift+Z" disabled={!canRedoProject} onClick={() => dispatchProjectHistory({ type: "redo" })}><Redo2 size={15} /></button>
               </div>
+              <button className={`zones-toggle ${showHistoryTimeline ? "active" : ""}`} type="button" aria-label="Afficher l’historique" aria-expanded={showHistoryTimeline} title="Historique du projet" onClick={() => setShowHistoryTimeline((visible) => !visible)}><History size={14} /></button>
               <button className={`zones-toggle ${showHabitatZones ? "active" : ""}`} type="button" aria-pressed={showHabitatZones} onClick={() => setShowHabitatZones((visible) => !visible)}><Layers size={14} /> Zones</button>
             </div>
             <span className="stage-dimensions">{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</span>
           </div>
+          {showHistoryTimeline && <section className="history-timeline" aria-label="Historique du projet">
+            <header><span><strong>Historique</strong><small>{projectHistory.cursor + 1} / {projectHistory.entries.length}</small></span><button type="button" aria-label="Fermer l’historique" onClick={() => setShowHistoryTimeline(false)}><X size={14} /></button></header>
+            <ol>{projectHistory.entries.map((entry, index) => <li key={index}>
+              <button type="button" className={index === projectHistory.cursor ? "current" : ""} aria-current={index === projectHistory.cursor ? "step" : undefined} onClick={() => dispatchProjectHistory({ type: "jump", cursor: index })}>
+                <span>{entry.label}</span><small>{index === projectHistory.cursor ? "Position actuelle" : index < projectHistory.cursor ? "Étape précédente" : "À rétablir"}</small>
+              </button>
+            </li>)}</ol>
+          </section>}
           <div className="viewport-wrap">
             <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} previewedLayoutSuggestion={previewedLayoutSuggestion} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />
             <div className="viewport-label"><span className="live-dot" /> {viewMode === "plan" ? "VUE EN PLAN" : "APERÇU EN DIRECT"}</div>
