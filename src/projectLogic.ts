@@ -7,6 +7,9 @@ export const decorationVariants = {
   Plante: ["Feuillage dense", "Fougère", "Rosette"],
   Roche: ["Roche anguleuse", "Galet", "Stratifiée"],
   Cachette: ["Grotte", "Tronc creux", "Écorce creuse"],
+  Branche: ["Branche droite", "Branche fourchue"],
+  Plateforme: ["Plateforme en bois", "Plateau en liège"],
+  Gamelle: ["Gamelle d’eau", "Coupelle sèche"],
 } as const;
 export type DecorationKind = keyof typeof decorationVariants;
 export type DecorationVariant = (typeof decorationVariants)[DecorationKind][number];
@@ -14,6 +17,9 @@ export const defaultDecorationVariant: Record<DecorationKind, DecorationVariant>
   Plante: "Feuillage dense",
   Roche: "Roche anguleuse",
   Cachette: "Grotte",
+  Branche: "Branche fourchue",
+  Plateforme: "Plateforme en bois",
+  Gamelle: "Gamelle d’eau",
 };
 export const plantStylesByBiotope: Record<Biotope, readonly Extract<DecorationVariant, "Feuillage dense" | "Fougère" | "Rosette">[]> = {
   Désertique: ["Rosette"],
@@ -164,7 +170,7 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
     if (typeof item !== "object" || item === null) return false;
     const decoration = item as Record<string, unknown>;
     const position = decoration.position;
-    const isValidKind = ["Plante", "Cachette", "Roche"].includes(decoration.kind as string);
+    const isValidKind = ["Plante", "Cachette", "Roche", "Branche", "Plateforme", "Gamelle"].includes(decoration.kind as string);
     const allowedVariants: readonly string[] = isValidKind ? decorationVariants[decoration.kind as DecorationKind] : [];
     const isValidVariant = decoration.variant === undefined || (typeof decoration.variant === "string" && allowedVariants.includes(decoration.variant));
     const isValidPosition = typeof position === "object" && position !== null &&

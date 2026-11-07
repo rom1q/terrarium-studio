@@ -235,14 +235,34 @@ describe("dimensioned plan placement", () => {
     const plant = { id: 3, kind: "Plante" as const, position: { x: 0, z: 0 } };
     const rock = { id: 4, kind: "Roche" as const, position: { x: 0, z: 0 } };
     const hide = { id: 5, kind: "Cachette" as const, position: { x: 0, z: 0 } };
-    const decorations = [plant, rock, hide];
+    const branch = { id: 6, kind: "Branche" as const, position: { x: 0, z: 0 } };
+    const platform = { id: 7, kind: "Plateforme" as const, position: { x: 0, z: 0 } };
+    const bowl = { id: 8, kind: "Gamelle" as const, position: { x: 0, z: 0 } };
+    const decorations = [plant, rock, hide, branch, platform, bowl];
 
-    expect(defaultDecorationVariant).toEqual({ Plante: "Feuillage dense", Roche: "Roche anguleuse", Cachette: "Grotte" });
+    expect(defaultDecorationVariant).toEqual({ Plante: "Feuillage dense", Roche: "Roche anguleuse", Cachette: "Grotte", Branche: "Branche fourchue", Plateforme: "Plateforme en bois", Gamelle: "Gamelle d’eau" });
     expect(decorationVariants.Plante).toContain("Fougère");
     expect(updateDecorationVariant(decorations, plant.id, "Fougère")[0].variant).toBe("Fougère");
     expect(updateDecorationVariant(decorations, rock.id, "Galet")[1].variant).toBe("Galet");
     expect(updateDecorationVariant(decorations, hide.id, "Tronc creux")[2].variant).toBe("Tronc creux");
+    expect(updateDecorationVariant(decorations, branch.id, "Branche droite")[3].variant).toBe("Branche droite");
+    expect(updateDecorationVariant(decorations, platform.id, "Plateau en liège")[4].variant).toBe("Plateau en liège");
+    expect(updateDecorationVariant(decorations, bowl.id, "Coupelle sèche")[5].variant).toBe("Coupelle sèche");
     expect(updateDecorationVariant(decorations, plant.id, "Grotte")).toBe(decorations);
+  });
+
+  it("accepts catalog objects in saved project exports", () => {
+    const catalogProject = {
+      ...project,
+      decorations: [
+        { id: 3, kind: "Branche", variant: "Branche fourchue", position: { x: 0, y: 0.4, z: 0 }, rotation: 90 },
+        { id: 4, kind: "Plateforme", variant: "Plateforme en bois", position: { x: 0.2, y: 0.5, z: 0.1 } },
+        { id: 5, kind: "Gamelle", variant: "Gamelle d’eau", position: { x: -0.2, z: -0.1 } },
+      ],
+      nextId: 6,
+    };
+
+    expect(parseProjectExport({ ...projectExport, project: catalogProject }, speciesLabels)?.decorations).toEqual(catalogProject.decorations);
   });
 
   it("suggests different plant styles by biotope without changing non-plant variants", () => {

@@ -12,6 +12,8 @@ import {
   Expand,
   Eye,
   FileText,
+  GitBranch,
+  Layers,
   Leaf,
   Move,
   Plus,
@@ -45,6 +47,7 @@ import {
   renameSavedProjectRecord,
   updateDecorationVariant,
   type Biotope,
+  type DecorationKind,
   type DecorationAxis,
   type CheckStatus,
   type Decoration,
@@ -133,6 +136,15 @@ const speciesList: SpeciesProfile[] = [
   },
 ];
 const speciesLabels = speciesList.map((species) => species.label);
+
+function DecorationIcon({ kind, size }: { kind: DecorationKind; size: number }) {
+  if (kind === "Plante") return <Leaf size={size} />;
+  if (kind === "Cachette") return <Expand size={size} />;
+  if (kind === "Branche") return <GitBranch size={size} />;
+  if (kind === "Plateforme") return <Layers size={size} />;
+  if (kind === "Gamelle") return <Waves size={size} />;
+  return <span className="rock-icon" />;
+}
 
 const biotopeColors: Record<Biotope, { ground: number; plant: number; water: number }> = {
   Désertique: { ground: 0xcda875, plant: 0x74884b, water: 0x8dbdc1 },
@@ -437,6 +449,76 @@ function App() {
         scene.add(hide);
         decorationObjects.push(hide);
         decorationObjectsById.set(item.id, hide);
+      } else if (item.kind === "Branche") {
+        const branch = new THREE.Group();
+        branch.userData.decorationId = item.id;
+        const wood = new THREE.MeshStandardMaterial({ color: variant === "Branche droite" ? 0x805f42 : 0x705238, roughness: 0.94 });
+        const addSegment = (start: THREE.Vector3, end: THREE.Vector3, radius: number) => {
+          const direction = new THREE.Vector3().subVectors(end, start);
+          const segment = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.72, radius, direction.length(), 8), wood);
+          segment.position.copy(start).add(end).multiplyScalar(0.5);
+          segment.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+          branch.add(segment);
+        };
+        addSegment(new THREE.Vector3(-0.48, 0.16, 0), new THREE.Vector3(0.48, 0.78, 0), 0.075);
+        if (variant === "Branche fourchue") {
+          addSegment(new THREE.Vector3(0.06, 0.48, 0), new THREE.Vector3(-0.2, 0.9, 0.18), 0.045);
+          addSegment(new THREE.Vector3(0.23, 0.59, 0), new THREE.Vector3(0.38, 0.98, -0.16), 0.04);
+        }
+        branch.scale.setScalar(sizeScale);
+        branch.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        branch.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(branch);
+        decorationObjects.push(branch);
+        decorationObjectsById.set(item.id, branch);
+      } else if (item.kind === "Plateforme") {
+        const platform = new THREE.Group();
+        platform.userData.decorationId = item.id;
+        const material = new THREE.MeshStandardMaterial({ color: variant === "Plateau en liège" ? 0x9a7855 : 0x806344, roughness: 0.92 });
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.1, 0.62), material);
+        slab.position.y = 0.48;
+        platform.add(slab);
+        for (const supportX of [-0.36, 0.36]) {
+          for (const supportZ of [-0.22, 0.22]) {
+            const support = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), material);
+            support.position.set(supportX, 0.22, supportZ);
+            platform.add(support);
+          }
+        }
+        platform.scale.setScalar(sizeScale);
+        platform.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        platform.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(platform);
+        decorationObjects.push(platform);
+        decorationObjectsById.set(item.id, platform);
+      } else if (item.kind === "Gamelle") {
+        const bowl = new THREE.Group();
+        bowl.userData.decorationId = item.id;
+        const ceramic = new THREE.MeshStandardMaterial({ color: 0x8b8b79, roughness: 0.48 });
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.21, 0.15, 20, 1, true), ceramic);
+        body.position.y = 0.075;
+        bowl.add(body);
+        const bottom = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 20), ceramic);
+        bottom.position.y = 0.02;
+        bowl.add(bottom);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.022, 6, 24), ceramic);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = 0.145;
+        bowl.add(rim);
+        if (variant === "Gamelle d’eau") {
+          const water = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.18, 0.18, 0.012, 20),
+            new THREE.MeshPhysicalMaterial({ color: colors.water, roughness: 0.2, metalness: 0.08 }),
+          );
+          water.position.y = 0.075;
+          bowl.add(water);
+        }
+        bowl.scale.setScalar(sizeScale);
+        bowl.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        bowl.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(bowl);
+        decorationObjects.push(bowl);
+        decorationObjectsById.set(item.id, bowl);
       } else {
         const isPebble = variant === "Galet";
         const rock = new THREE.Mesh(
@@ -634,9 +716,9 @@ function App() {
 
   const addDecoration = (kind: Decoration["kind"]) => {
     setDecorations((current) => {
-      const column = current.length % 4;
-      const row = Math.floor(current.length / 4);
-      const position = { x: (column - 1.5) * 0.32, z: row % 2 === 0 ? -0.45 : 0.45 };
+      const column = current.length % 3;
+      const row = Math.floor(current.length / 3);
+      const position = { x: (column - 1) * 0.5, z: row % 2 === 0 ? -0.45 : 0.45 };
       return [...current, { id: nextId, kind, variant: getDefaultDecorationVariant(kind, biotope), position }];
     });
     setNextId((current) => current + 1);
@@ -947,7 +1029,7 @@ function App() {
     unknown: "Non documenté",
   };
   const positionedDecorations = measureDecorationPlacement(decorations, dimensions);
-  const decorationCounts = (["Plante", "Cachette", "Roche"] as const)
+  const decorationCounts = (["Plante", "Cachette", "Roche", "Branche", "Plateforme", "Gamelle"] as const)
     .map((kind) => ({ kind, count: decorations.filter((item) => item.kind === kind).length }))
     .filter((item) => item.count > 0);
 
@@ -1043,6 +1125,9 @@ function App() {
               <button type="button" onClick={() => addDecoration("Plante")}><Plus size={14} /><Leaf size={15} /> Plante</button>
               <button type="button" onClick={() => addDecoration("Cachette")}><Plus size={14} /><Expand size={14} /> Cachette</button>
               <button type="button" onClick={() => addDecoration("Roche")}><Plus size={14} /><span className="rock-icon" /> Roche</button>
+              <button type="button" onClick={() => addDecoration("Branche")}><Plus size={14} /><GitBranch size={14} /> Branche</button>
+              <button type="button" onClick={() => addDecoration("Plateforme")}><Plus size={14} /><Layers size={14} /> Plate-forme</button>
+              <button type="button" onClick={() => addDecoration("Gamelle")}><Plus size={14} /><Waves size={14} /> Gamelle</button>
             </div>
             <p className="decor-variant-note">Variantes visuelles uniquement; vérifiez la compatibilité des matériaux avec l’espèce.</p>
             <div className="decor-list">
@@ -1051,7 +1136,7 @@ function App() {
                 const variantOptions = getDecorationVariantsForBiotope(item.kind, biotope);
                 const variantIsSuggested = variantOptions.includes(selectedVariant);
                 return <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
-                  <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={14} /> : item.kind === "Cachette" ? <Expand size={14} /> : <span className="rock-icon" />}</span>
+                  <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}><DecorationIcon kind={item.kind} size={14} /></span>
                   <div className="decor-editor">
                     <div className="decor-item-heading"><span>{item.kind} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">Paroi proche {item.nearestWallCm} cm</small></div>
                     {selectedDecorationId === item.id && viewMode === "3d" && <div className="transform-tools" role="group" aria-label={`Outils pour ${item.kind}`}>
@@ -1172,13 +1257,13 @@ function App() {
               <h3>Plan coté</h3>
               <div className="report-plan-dimensions"><span>Largeur intérieure <strong>{dimensions.width} cm</strong></span><span>Profondeur intérieure <strong>{dimensions.depth} cm</strong></span></div>
               <div className="report-plan-frame" role="img" aria-label={`Plan du terrarium de ${dimensions.width} par ${dimensions.depth} centimètres avec le décor placé`} style={{ aspectRatio: `${Math.max(1, dimensions.width)} / ${Math.max(1, dimensions.depth)}`, backgroundSize: `${Math.min(100, 1000 / Math.max(10, dimensions.width))}% ${Math.min(100, 1000 / Math.max(10, dimensions.depth))}%` }}>
-                {positionedDecorations.map((item) => { const markerSize = 16 + (item.size ?? 100) * 0.08; return <span key={item.id} className={`report-plan-marker marker-${item.kind.toLowerCase()}`} style={{ left: `${Math.min(97, Math.max(3, (item.position.x + 1) * 50))}%`, top: `${Math.min(97, Math.max(3, (item.position.z + 1) * 50))}%`, width: markerSize, height: markerSize }} title={`${item.kind} · X ${item.xCm} cm · Z ${item.zCm} cm · ${item.size ?? 100}%`} aria-label={`${item.kind}, X ${item.xCm} cm, Z ${item.zCm} cm, taille ${item.size ?? 100}%`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={12} /> : <span className="rock-icon" />}</span>; })}
+                {positionedDecorations.map((item) => { const markerSize = 16 + (item.size ?? 100) * 0.08; return <span key={item.id} className={`report-plan-marker marker-${item.kind.toLowerCase()}`} style={{ left: `${Math.min(97, Math.max(3, (item.position.x + 1) * 50))}%`, top: `${Math.min(97, Math.max(3, (item.position.z + 1) * 50))}%`, width: markerSize, height: markerSize }} title={`${item.kind} · X ${item.xCm} cm · Z ${item.zCm} cm · ${item.size ?? 100}%`} aria-label={`${item.kind}, X ${item.xCm} cm, Z ${item.zCm} cm, taille ${item.size ?? 100}%`}><DecorationIcon kind={item.kind} size={13} /></span>; })}
               </div>
-              <div className="report-plan-legend"><span><i className="legend-dot plant-dot" /> Plante</span><span><i className="legend-dot hide-dot" /> Cachette</span><span><i className="legend-dot rock-dot" /> Roche</span></div>
+              <div className="report-plan-legend"><span><i className="legend-dot plant-dot" /> Plante</span><span><i className="legend-dot hide-dot" /> Cachette</span><span><i className="legend-dot rock-dot" /> Roche</span><span><i className="legend-dot branch-dot" /> Branche</span><span><i className="legend-dot platform-dot" /> Plate-forme</span><span><i className="legend-dot bowl-dot" /> Gamelle</span></div>
               <h4>Décor à prévoir</h4>
               {decorationCounts.length === 0 ? <p className="report-no-decor">Aucun élément de décor placé.</p> : <>
                 <div className="report-material-counts">{decorationCounts.map((item) => <span key={item.kind}>{item.kind} <strong>× {item.count}</strong></span>)}</div>
-                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={13} /> : <span className="rock-icon" />}</span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)}</strong><small>X {item.xCm} cm depuis la gauche · Y {item.yCm} cm au-dessus du fond · Z {item.zCm} cm depuis le haut · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
+                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}><DecorationIcon kind={item.kind} size={13} /></span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)}</strong><small>X {item.xCm} cm depuis la gauche · Y {item.yCm} cm au-dessus du fond · Z {item.zCm} cm depuis le haut · rotation Y {item.rotation ?? 0}° · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
               </>}
             </section>
             <h3>Critères et relevés</h3>

@@ -122,6 +122,7 @@ h1, h2, p { margin-top: 0; }
 .viewport[data-mode="plan"] canvas:active { cursor: grabbing; }
 .decor-swatch { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; }
 .swatch-plante { background: #edf3e8; color: #6a8a62; }.swatch-cachette { background: #f3eee6; color: #927d61; }.swatch-roche { background: #efefeb; }
+.swatch-branche { background: #f1e8dc; color: #846144; }.swatch-plateforme { background: #eee9dd; color: #736044; }.swatch-gamelle { background: #e5f1f0; color: #4f8586; }
 .remove-button { justify-self: center; border: 0; background: transparent; color: #abb3aa; padding: 4px; display: grid; place-items: center; cursor: pointer; }
 .remove-button:hover { color: #8d5f4f; }
 .empty-decor { color: #a0a99f; font-size: 10px; padding: 5px 0 0; margin: 0; }
@@ -221,10 +222,12 @@ h1, h2, p { margin-top: 0; }
 .report-plan-frame { position: relative; width: min(520px, 100%); margin: 0 auto; overflow: hidden; border: 1px solid #718473; background-color: #f7f8f2; background-image: linear-gradient(to right, #dce3d8 1px, transparent 1px), linear-gradient(to bottom, #dce3d8 1px, transparent 1px); }
 .report-plan-marker { position: absolute; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%); border: 1px solid #fff; border-radius: 50%; box-shadow: 0 1px 3px #29372f35; }
 .report-plan-marker.marker-plante { background: #e7f0e2; color: #557358; }.report-plan-marker.marker-cachette { background: #f1e8db; color: #806b4e; }.report-plan-marker.marker-roche { background: #e7e7e1; color: #696b61; }
+.report-plan-marker.marker-branche { background: #f1e8dc; color: #846144; }.report-plan-marker.marker-plateforme { background: #eee9dd; color: #736044; }.report-plan-marker.marker-gamelle { background: #e5f1f0; color: #4f8586; }
 .report-plan-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 8px 0 14px; color: #758076; font-size: 8px; }
 .report-plan-legend > span { display: inline-flex; align-items: center; gap: 5px; }
 .report-plan-legend .legend-dot { width: 8px; height: 8px; }
 .report-plan-legend .plant-dot { background: #6a8a62; }.report-plan-legend .hide-dot { background: #927d61; }.report-plan-legend .rock-dot { background: #9a998f; }
+.report-plan-legend .branch-dot { background: #846144; }.report-plan-legend .platform-dot { background: #736044; }.report-plan-legend .bowl-dot { background: #4f8586; }
 .project-report .report-plan-section h4 { margin: 0 0 7px; color: #58675c; font: 600 10px var(--display); }
 .report-material-counts { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 7px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: #748075; font-size: 9px; }
 .report-material-counts strong { color: #46564a; }
