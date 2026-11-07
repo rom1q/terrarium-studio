@@ -70,7 +70,9 @@ import {
   readCurrentProject,
   readSavedProjectCheckpoints,
   readSavedProjects,
+  removeSavedProjectCheckpoint,
   removeSavedProjectCheckpoints,
+  renameSavedProjectCheckpoint,
   writeCurrentProject,
   writeProjectCheckpoint,
   writeProjectCollection,
@@ -122,6 +124,8 @@ function App() {
   const [savedProjectCheckpoints, setSavedProjectCheckpoints] = useState<SavedProjectCheckpoint[]>([]);
   const [checkpointName, setCheckpointName] = useState("");
   const [checkpointFeedback, setCheckpointFeedback] = useState("");
+  const [editingCheckpointId, setEditingCheckpointId] = useState<string | null>(null);
+  const [editingCheckpointName, setEditingCheckpointName] = useState("");
   const [projectHistory, dispatchProjectHistory] = useReducer(projectHistoryReducer, {
     shape: initialProject?.shape ?? "Basse",
     biotope: initialBiotope,
@@ -456,6 +460,10 @@ function App() {
       setCheckpointFeedback("Enregistre le projet avant de créer un point.");
       return;
     }
+    if (savedProjectCheckpoints.length >= MAX_SAVED_PROJECT_CHECKPOINTS) {
+      const oldest = savedProjectCheckpoints[0];
+      if (!window.confirm(`La limite de ${MAX_SAVED_PROJECT_CHECKPOINTS} points est atteinte. « ${oldest.label} » sera supprimé pour enregistrer le nouveau point. Continuer ?`)) return;
+    }
     const snapshot: StoredProject = {
       id: projectId,
       name: projectName.trim() || "Habitat sans titre",
@@ -476,6 +484,30 @@ function App() {
     setSavedProjectCheckpoints(readSavedProjectCheckpoints(projectId, speciesLabels));
     setCheckpointName("");
     setCheckpointFeedback("Point de restauration enregistré.");
+  };
+
+  const renameCheckpoint = (checkpoint: SavedProjectCheckpoint) => {
+    if (!projectId) return;
+    const renamed = renameSavedProjectCheckpoint(projectId, checkpoint.id, editingCheckpointName, speciesLabels);
+    if (!renamed) {
+      setCheckpointFeedback("Nom invalide ou stockage indisponible.");
+      return;
+    }
+    setSavedProjectCheckpoints(readSavedProjectCheckpoints(projectId, speciesLabels));
+    setEditingCheckpointId(null);
+    setEditingCheckpointName("");
+    setCheckpointFeedback("Point renommé.");
+  };
+
+  const deleteCheckpoint = (checkpoint: SavedProjectCheckpoint) => {
+    if (!projectId || !window.confirm(`Supprimer le point « ${checkpoint.label} » ?`)) return;
+    if (!removeSavedProjectCheckpoint(projectId, checkpoint.id, speciesLabels)) {
+      setCheckpointFeedback("Suppression impossible sur cet appareil.");
+      return;
+    }
+    setSavedProjectCheckpoints(readSavedProjectCheckpoints(projectId, speciesLabels));
+    if (previewedCheckpointId === checkpoint.id) setPreviewedCheckpointId(null);
+    setCheckpointFeedback("Point supprimé.");
   };
 
   const saveProject = () => {
@@ -808,9 +840,21 @@ function App() {
               </div>
               {checkpointFeedback && <small className="checkpoint-feedback" role="status">{checkpointFeedback}</small>}
               {savedProjectCheckpoints.length > 0 && <ul>{savedProjectCheckpoints.map((checkpoint) => <li key={checkpoint.id}>
-                <button type="button" className={previewedCheckpointId === checkpoint.id ? "selected" : ""} aria-pressed={previewedCheckpointId === checkpoint.id} onClick={() => { setPreviewedHistoryCursor(null); setPreviewedCheckpointId(checkpoint.id); }}>
-                  <span>{checkpoint.label}</span><small>{new Date(checkpoint.createdAt).toLocaleString("fr-FR")}</small>
-                </button>
+                {editingCheckpointId === checkpoint.id
+                  ? <div className="checkpoint-edit-form">
+                    <input type="text" maxLength={60} aria-label={`Nouveau nom pour ${checkpoint.label}`} value={editingCheckpointName} onChange={(event) => setEditingCheckpointName(event.target.value)} />
+                    <button type="button" aria-label="Enregistrer le nom du point" disabled={!editingCheckpointName.trim()} onClick={() => renameCheckpoint(checkpoint)}><Check size={12} /></button>
+                    <button type="button" aria-label="Annuler le renommage" onClick={() => setEditingCheckpointId(null)}><X size={12} /></button>
+                  </div>
+                  : <div className="checkpoint-row">
+                    <button type="button" className={`checkpoint-select ${previewedCheckpointId === checkpoint.id ? "selected" : ""}`} aria-pressed={previewedCheckpointId === checkpoint.id} onClick={() => { setPreviewedHistoryCursor(null); setPreviewedCheckpointId(checkpoint.id); }}>
+                      <span>{checkpoint.label}</span><small>{new Date(checkpoint.createdAt).toLocaleString("fr-FR")}</small>
+                    </button>
+                    <div className="checkpoint-actions">
+                      <button type="button" aria-label={`Renommer ${checkpoint.label}`} title={`Renommer ${checkpoint.label}`} onClick={() => { setEditingCheckpointId(checkpoint.id); setEditingCheckpointName(checkpoint.label); }}><Pencil size={12} /></button>
+                      <button type="button" aria-label={`Supprimer ${checkpoint.label}`} title={`Supprimer ${checkpoint.label}`} onClick={() => deleteCheckpoint(checkpoint)}><Trash2 size={12} /></button>
+                    </div>
+                  </div>}
               </li>)}</ul>}
             </div>
             <ol>{projectHistory.entries.map((entry, index) => <li key={index}>

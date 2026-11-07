@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getUniqueProjectName, MAX_SAVED_PROJECT_CHECKPOINTS, readCurrentProject, readSavedProjectCheckpoints, readSavedProjects, removeSavedProjectCheckpoints, writeProjectCheckpoint, writeProjectCollection } from "./projectRepository";
+import { getUniqueProjectName, MAX_SAVED_PROJECT_CHECKPOINTS, readCurrentProject, readSavedProjectCheckpoints, readSavedProjects, renameSavedProjectCheckpoint, removeSavedProjectCheckpoint, removeSavedProjectCheckpoints, writeProjectCheckpoint, writeProjectCollection } from "./projectRepository";
 import type { StoredProject } from "../domain/projectLogic";
 
 const speciesLabels = ["Test animal"];
@@ -87,6 +87,37 @@ describe("project repository", () => {
 
     expect(first).not.toBeNull();
     expect(writeProjectCheckpoint({ ...project, name: "Updated" }, "Point suivant", speciesLabels, storage)).toBeNull();
+    expect(storage.values.get("terrarium-studio-project-checkpoints")).toBe(previousValue);
+  });
+
+  it("renames a checkpoint without changing its snapshot or creation date", () => {
+    const storage = createMemoryStorage();
+    const created = writeProjectCheckpoint(project, "Avant", speciesLabels, storage)!;
+    const renamed = renameSavedProjectCheckpoint(project.id, created.id, "  Après travaux  ", speciesLabels, storage);
+
+    expect(renamed?.label).toBe("Après travaux");
+    expect(renamed?.createdAt).toBe(created.createdAt);
+    expect(renamed?.project).toEqual(created.project);
+    expect(readSavedProjectCheckpoints(project.id, speciesLabels, storage)[0].label).toBe("Après travaux");
+  });
+
+  it("deletes only the selected checkpoint and preserves its neighbors", () => {
+    const storage = createMemoryStorage();
+    const first = writeProjectCheckpoint(project, "Avant", speciesLabels, storage)!;
+    const second = writeProjectCheckpoint(project, "Après", speciesLabels, storage)!;
+
+    expect(removeSavedProjectCheckpoint(project.id, first.id, speciesLabels, storage)).toBe(true);
+    expect(readSavedProjectCheckpoints(project.id, speciesLabels, storage)).toEqual([second]);
+  });
+
+  it("keeps the previous checkpoint label when a rename hits the storage quota", () => {
+    const storage = createMemoryStorage();
+    const checkpoint = writeProjectCheckpoint(project, "Original", speciesLabels, storage)!;
+    const previousValue = storage.values.get("terrarium-studio-project-checkpoints");
+    storage.setItem = () => { throw new Error("Storage full"); };
+
+    expect(renameSavedProjectCheckpoint(project.id, checkpoint.id, "Nouveau", speciesLabels, storage)).toBeNull();
+    expect(removeSavedProjectCheckpoint(project.id, checkpoint.id, speciesLabels, storage)).toBe(false);
     expect(storage.values.get("terrarium-studio-project-checkpoints")).toBe(previousValue);
   });
 

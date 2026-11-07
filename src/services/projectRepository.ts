@@ -87,6 +87,56 @@ export function writeProjectCheckpoint(
   }
 }
 
+export function renameSavedProjectCheckpoint(
+  projectId: string,
+  checkpointId: string,
+  label: string,
+  allowedSpecies: readonly string[],
+  storage: CheckpointStorage = localStorage,
+): SavedProjectCheckpoint | null {
+  const normalizedLabel = label.trim();
+  if (!normalizedLabel || normalizedLabel.length > 60) return null;
+  const collection = readProjectCheckpointCollection(storage);
+  if (!collection) return null;
+  const checkpoints = parseProjectCheckpoints(collection.projects[projectId], projectId, allowedSpecies);
+  const existing = checkpoints.find((checkpoint) => checkpoint.id === checkpointId);
+  if (!existing) return null;
+  const renamed = { ...existing, label: normalizedLabel };
+
+  try {
+    storage.setItem(projectCheckpointsStorageKey, JSON.stringify({
+      ...collection,
+      projects: { ...collection.projects, [projectId]: checkpoints.map((checkpoint) => checkpoint.id === checkpointId ? renamed : checkpoint) },
+    }));
+    return renamed;
+  } catch {
+    return null;
+  }
+}
+
+export function removeSavedProjectCheckpoint(
+  projectId: string,
+  checkpointId: string,
+  allowedSpecies: readonly string[],
+  storage: CheckpointStorage = localStorage,
+): boolean {
+  const collection = readProjectCheckpointCollection(storage);
+  if (!collection) return false;
+  const checkpoints = parseProjectCheckpoints(collection.projects[projectId], projectId, allowedSpecies);
+  if (!checkpoints.some((checkpoint) => checkpoint.id === checkpointId)) return false;
+  const remaining = checkpoints.filter((checkpoint) => checkpoint.id !== checkpointId);
+
+  try {
+    storage.setItem(projectCheckpointsStorageKey, JSON.stringify({
+      ...collection,
+      projects: { ...collection.projects, [projectId]: remaining },
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function removeSavedProjectCheckpoints(projectId: string, storage: CheckpointStorage = localStorage): boolean {
   const collection = readProjectCheckpointCollection(storage);
   if (!collection) return false;

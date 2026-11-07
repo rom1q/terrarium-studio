@@ -179,11 +179,17 @@ h1, h2, p { margin-top: 0; }
 .checkpoint-save-form button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 28px; padding: 4px 7px; border: 0; border-radius: 3px; background: #49664f; color: white; font-size: 8px; cursor: pointer; }
 .checkpoint-save-form button:disabled { background: #e7ebe4; color: #9aa39a; cursor: default; }
 .saved-checkpoints ul { display: grid; gap: 2px; max-height: 76px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
-.saved-checkpoints ul button { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 5px 6px; border: 0; border-radius: 3px; background: #f5f7f2; color: #53665a; text-align: left; cursor: pointer; }
-.saved-checkpoints ul button.selected { background: #edf2f3; color: #356a73; }
-.saved-checkpoints ul button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; }
-.saved-checkpoints ul button small { flex: 0 0 auto; color: #8b978d; font-size: 7px; }
-.saved-checkpoints ul button:focus-visible, .checkpoint-save-form button:focus-visible { outline: 2px solid #6a876e; outline-offset: 1px; }
+.checkpoint-row { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.checkpoint-select { display: flex; flex: 1; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; padding: 5px 6px; border: 0; border-radius: 3px; background: #f5f7f2; color: #53665a; text-align: left; cursor: pointer; }
+.checkpoint-select.selected { background: #edf2f3; color: #356a73; }
+.checkpoint-select span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; }
+.checkpoint-select small { flex: 0 0 auto; color: #8b978d; font-size: 7px; }
+.checkpoint-actions { display: flex; gap: 1px; }
+.checkpoint-actions button, .checkpoint-edit-form button { display: grid; place-items: center; flex: 0 0 auto; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 3px; background: transparent; color: #738176; cursor: pointer; }
+.checkpoint-actions button:hover, .checkpoint-edit-form button:hover { background: #edf3e8; color: #49664f; }
+.checkpoint-edit-form { display: flex; gap: 3px; width: 100%; }
+.checkpoint-edit-form input { flex: 1; width: 0; min-width: 0; padding: 4px 6px; border: 1px solid #dfe4da; border-radius: 3px; background: #fff; color: #354238; font-size: 8px; }
+.checkpoint-select:focus-visible, .checkpoint-actions button:focus-visible, .checkpoint-edit-form button:focus-visible, .checkpoint-edit-form input:focus-visible, .checkpoint-save-form button:focus-visible { outline: 2px solid #6a876e; outline-offset: 1px; }
 .history-timeline ol { display: grid; gap: 2px; max-height: 150px; overflow: auto; margin: 0; padding: 5px; list-style: none; }
 .history-timeline li button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 7px 8px; border: 0; border-radius: 3px; background: transparent; color: #59695d; text-align: left; cursor: pointer; }
 .history-timeline li button.current { background: #edf3e8; color: #405b45; }
