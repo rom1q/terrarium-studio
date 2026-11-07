@@ -6,6 +6,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { getDefaultDecorationVariant, getEquipmentZoneSources, rotateDecoration, type Biotope, type Decoration, type HabitatZoneGuidance, type HabitatZoneKey, type Shape, type SpeciesProfile } from "../../domain/projectLogic";
 import { plantCatalog } from "../../data/plantCatalog";
 import { createPlantModel } from "./plantModels";
+import { createRockModel } from "./decorationModels";
 
 type TerrariumSceneProps = {
   shape: Shape;
@@ -310,13 +311,8 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         decorationObjects.push(tube);
         decorationObjectsById.set(item.id, tube);
       } else {
-        const isPebble = variant === "Galet";
-        const rock = new THREE.Mesh(
-          isPebble ? new THREE.SphereGeometry(0.32, 12, 8) : new THREE.DodecahedronGeometry(0.32, 0),
-          new THREE.MeshStandardMaterial({ color: variant === "Stratifiée" ? 0x9a9284 : item.id % 2 ? 0x9a8b76 : 0x776a5d, roughness: isPebble ? 0.72 : 0.98 }),
-        );
-        const rockScale = variant === "Stratifiée" ? [1.35, 0.48, 1.1] : isPebble ? [1.25, 0.72, 0.95] : [1.2, 0.82, 0.95];
-        rock.scale.set(rockScale[0] * sizeScale, rockScale[1] * sizeScale, rockScale[2] * sizeScale);
+        const rock = createRockModel(variant as "Roche anguleuse" | "Galet" | "Stratifiée", item.id);
+        rock.scale.setScalar(sizeScale);
         rock.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
         rock.position.set(x, floorY + 0.28 + verticalOffset, z);
         rock.userData.decorationId = item.id;
