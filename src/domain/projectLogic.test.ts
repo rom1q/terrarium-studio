@@ -159,7 +159,7 @@ describe("project checks", () => {
       measurements,
     });
 
-    expect(result.checks.every((check) => check.status === "unknown")).toBe(true);
+    expect(result.checks.filter((check) => !["Parois, sol et plafond", "Chevauchements et entrées"].includes(check.label)).every((check) => check.status === "unknown")).toBe(true);
     expect(result.overallStatus).toBe("À documenter");
   });
 
@@ -175,6 +175,19 @@ describe("project checks", () => {
     expect(result.overallStatus).toBe("Repères à compléter");
   });
 
+  it("reports decoration wall overhang without blocking intentional layout edits", () => {
+    const result = calculateProjectChecks({
+      species: { ...pogona, hidesAtBothEnds: null },
+      dimensions: project.dimensions,
+      decorations: [{ id: 3, kind: "Roche", position: { x: 1, z: 0 } }],
+      measurements,
+    });
+
+    expect(result.checks.find((check) => check.label === "Parois, sol et plafond")?.status).toBe("attention");
+    expect(result.checks.find((check) => check.label === "Parois, sol et plafond")?.detail).toContain("paroi droite");
+    expect(result.overallStatus).toBe("Implantation à vérifier");
+  });
+
   it("does not apply adult thresholds to a juvenile", () => {
     const result = calculateProjectChecks({
       species: pogona,
@@ -184,7 +197,7 @@ describe("project checks", () => {
       measurements: { hotSideTemperature: 10, coolSideTemperature: 10, baskingUvi: 0, coolSideHumidity: 100 },
     });
 
-    expect(result.checks.every((check) => check.status === "unknown")).toBe(true);
+    expect(result.checks.filter((check) => !["Parois, sol et plafond", "Chevauchements et entrées"].includes(check.label)).every((check) => check.status === "unknown")).toBe(true);
     expect(result.overallStatus).toBe("À documenter");
   });
 });

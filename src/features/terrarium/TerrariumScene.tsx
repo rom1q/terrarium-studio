@@ -8,6 +8,7 @@ import { plantCatalog } from "../../data/plantCatalog";
 import { createPlantModel } from "./plantModels";
 import { createRockModel } from "./decorationModels";
 import { createHideModel } from "./hideModels";
+import { getTerrariumSceneDimensions } from "../../domain/layoutValidation";
 
 type TerrariumSceneProps = {
   shape: Shape;
@@ -84,10 +85,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     transformControls.showX = transformMode !== "rotate";
     transformControls.showZ = transformMode !== "rotate";
 
-    const width = Math.min(3.2, Math.max(1.7, dimensions.width / 58));
-    const depth = Math.min(2.5, Math.max(1.25, dimensions.depth / 38));
-    const heightScale = shape === "Verticale" ? 0.038 : shape === "Cubique" ? 0.03 : 0.022;
-    const height = Math.min(3.1, Math.max(1.65, dimensions.height * heightScale));
+    const { width, depth, height } = getTerrariumSceneDimensions(shape, dimensions);
     const floorY = 0.12;
     const colors = biotopeColors[biotope];
     const zoneIsDocumented = (key: HabitatZoneKey) => habitatZoneGuidance.find((zone) => zone.key === key)?.status === "documented";

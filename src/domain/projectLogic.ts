@@ -1,4 +1,5 @@
 import { plantCatalog } from "../data/plantCatalog";
+import { analyzeDecorationLayout, formatDecorationLayoutWarnings } from "./layoutValidation";
 
 export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
@@ -91,6 +92,8 @@ export type ProjectCheckSummary = {
 export type ProjectCheckInput = {
   species: Pick<SpeciesProfile, "minimumDimensions" | "referenceRanges" | "hidesAtBothEnds">;
   dimensions: { width: number; depth: number; height: number };
+  shape?: Shape;
+  biotope?: Biotope;
   decorations: Decoration[];
   measurements: Measurements;
   lifeStage?: LifeStage;
@@ -283,7 +286,7 @@ export function parseProjectExport(value: unknown, allowedSpecies: readonly stri
   return project;
 }
 
-export function calculateProjectChecks({ species, dimensions, decorations, measurements, lifeStage = "adult" }: ProjectCheckInput): ProjectCheckSummary {
+export function calculateProjectChecks({ species, dimensions, shape = "Basse", biotope = "Désertique", decorations, measurements, lifeStage = "adult" }: ProjectCheckInput): ProjectCheckSummary {
   const minimumDimensions = lifeStage === "adult" ? species.minimumDimensions : null;
   const referenceRanges = lifeStage === "adult" ? species.referenceRanges : null;
   const hidesAtBothEnds = lifeStage === "adult" ? species.hidesAtBothEnds : null;
@@ -301,6 +304,20 @@ export function calculateProjectChecks({ species, dimensions, decorations, measu
       status: hideEndCount === 2 ? "met" : "insufficient",
       detail: hideEndCount === 2 ? "2/2 extrémités couvertes" : `${hideEndCount}/2 extrémités · cachette manquante dans le quart ${hasHideAtLeftEnd ? "droit" : "gauche"}`,
     };
+  const layoutWarnings = analyzeDecorationLayout(decorations, dimensions, shape, biotope);
+  const layoutDetails = formatDecorationLayoutWarnings(layoutWarnings);
+  const layoutChecks: ProjectCheck[] = [
+    {
+      label: "Parois, sol et plafond",
+      status: layoutWarnings.boundaries.length === 0 ? "met" : "attention",
+      detail: layoutDetails.boundaries,
+    },
+    {
+      label: "Chevauchements et entrées",
+      status: layoutWarnings.clearances.length === 0 ? "met" : "attention",
+      detail: layoutDetails.clearances,
+    },
+  ];
   const rangeCheck = (label: string, key: MeasurementKey, unit: string): ProjectCheck => {
     const range = referenceRanges?.[key];
     const value = measurements[key];
@@ -325,12 +342,15 @@ export function calculateProjectChecks({ species, dimensions, decorations, measu
     rangeCheck("UVI zone de basking", "baskingUvi", "UVI"),
     rangeCheck("Humidité côté frais", "coolSideHumidity", "%"),
     hidingCheck,
+    ...layoutChecks,
     { label: "Autre enrichissement", status: "unknown", detail: "Non documenté" },
   ];
   const hasInsufficientCheck = checks.some((check) => check.status === "insufficient");
   const hasAttentionCheck = checks.some((check) => check.status === "attention");
+  const hasLayoutWarnings = layoutWarnings.boundaries.length > 0 || layoutWarnings.clearances.length > 0;
+  const hasMeasurementWarnings = checks.some((check) => ["Zone chaude", "Zone fraîche", "UVI zone de basking", "Humidité côté frais"].includes(check.label) && check.status === "attention");
   const allChecksDocumented = checks.every((check) => check.status !== "unknown");
-  const overallStatus = hasInsufficientCheck ? "Repères à compléter" : hasAttentionCheck ? "Mesure à vérifier" : allChecksDocumented ? "Dans les repères consultés" : "À documenter";
+  const overallStatus = hasInsufficientCheck ? "Repères à compléter" : hasLayoutWarnings && hasMeasurementWarnings ? "Implantation et mesures à vérifier" : hasLayoutWarnings ? "Implantation à vérifier" : hasAttentionCheck ? "Mesure à vérifier" : allChecksDocumented ? "Dans les repères consultés" : "À documenter";
   return { checks, hasInsufficientCheck, hasAttentionCheck, allChecksDocumented, overallStatus };
 }
 

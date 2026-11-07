@@ -75,8 +75,8 @@ const habitatZoneLabels: Record<HabitatZoneKey, string> = {
 
 const createDefaultDecorations = (): Decoration[] => [
   { id: 1, kind: "Plante", position: { x: -0.62, z: -0.42 } },
-  { id: 2, kind: "Roche", position: { x: 0.22, z: 0.4 } },
-  { id: 3, kind: "Cachette", position: { x: 0.62, z: -0.42 } },
+  { id: 2, kind: "Roche", position: { x: -0.5, z: 0.55 } },
+  { id: 3, kind: "Cachette", position: { x: 0.38, z: -0.42 } },
 ];
 
 const createDefaultMeasurements = (): Measurements => ({
@@ -451,7 +451,7 @@ function App() {
   };
 
   const selectedBiotopeGuidance = getBiotopeGuidance(selectedSpecies, biotope);
-  const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, decorations, measurements, lifeStage });
+  const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, shape, biotope, decorations, measurements, lifeStage });
   const checkStatusLabels: Record<CheckStatus, string> = {
     met: "Repère atteint",
     insufficient: "À compléter",
@@ -631,7 +631,7 @@ function App() {
           <div className="analysis-heading"><span className="analysis-icon"><ShieldCheck size={19} /></span><div><p className="eyebrow">BILAN DU PROJET</p><h2>Conformité</h2></div></div>
           <div className={`status-block ${hasInsufficientCheck ? "insufficient" : hasAttentionCheck ? "attention" : ""}`}>
             <div className="status-top"><span className="status-mark">{hasInsufficientCheck || hasAttentionCheck ? <AlertTriangle size={15} /> : <CircleHelp size={15} />}</span><span>{overallStatus}</span></div>
-            <p>{hasInsufficientCheck ? "Au moins un repère de la source n’est pas atteint. Consultez le détail ci-dessous." : hasAttentionCheck ? "Au moins une mesure est hors de la plage de référence; vérifiez le matériel, le point de mesure et le guide complet." : "Ce bilan est partiel : les critères sans données sourcées restent inconnus et ne sont pas considérés comme conformes."}</p>
+            <p>{hasInsufficientCheck ? "Au moins un repère de la source n’est pas atteint. Consultez le détail ci-dessous." : hasAttentionCheck ? "Au moins une mesure ou un dégagement de placement demande une vérification; consultez les détails ci-dessous." : "Ce bilan est partiel : les critères sans données sourcées restent inconnus et ne sont pas considérés comme conformes."}</p>
           </div>
           <div className="selected-species"><p className="field-label">ESPÈCE SÉLECTIONNÉE</p><strong>{selectedSpecies.commonName}</strong><span>{selectedSpecies.scientificName}</span></div>
           <div className="species-source"><p className="field-label">RÉFÉRENCE</p>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><small>Consultée le {selectedSpecies.source.checkedAt}</small></> : <span>Aucune référence vérifiée. Ces points restent inconnus.</span>}</div>

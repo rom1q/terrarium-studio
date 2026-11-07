@@ -24,6 +24,7 @@ function createCaveShell() {
     new THREE.MeshStandardMaterial({ color: 0x887967, roughness: 0.98, flatShading: true }),
   );
   cave.position.z = -0.36;
+  cave.position.y = 0.025;
   return cave;
 }
 
