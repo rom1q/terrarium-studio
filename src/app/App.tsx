@@ -65,11 +65,16 @@ import {
   clearCurrentProject,
   downloadProjectExport,
   getUniqueProjectName,
+  MAX_SAVED_PROJECT_CHECKPOINTS,
   parseProjectFile,
   readCurrentProject,
+  readSavedProjectCheckpoints,
   readSavedProjects,
+  removeSavedProjectCheckpoints,
   writeCurrentProject,
+  writeProjectCheckpoint,
   writeProjectCollection,
+  type SavedProjectCheckpoint,
 } from "../services/projectRepository";
 
 type SaveStatus = "idle" | "pending" | "saved" | "error";
@@ -113,6 +118,10 @@ function App() {
   const [draftProjectName, setDraftProjectName] = useState("");
   const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
   const [previewedHistoryCursor, setPreviewedHistoryCursor] = useState<number | null>(null);
+  const [previewedCheckpointId, setPreviewedCheckpointId] = useState<string | null>(null);
+  const [savedProjectCheckpoints, setSavedProjectCheckpoints] = useState<SavedProjectCheckpoint[]>([]);
+  const [checkpointName, setCheckpointName] = useState("");
+  const [checkpointFeedback, setCheckpointFeedback] = useState("");
   const [projectHistory, dispatchProjectHistory] = useReducer(projectHistoryReducer, {
     shape: initialProject?.shape ?? "Basse",
     biotope: initialBiotope,
@@ -125,18 +134,43 @@ function App() {
   }, (project) => createProjectHistory(project, initialProject ? "Projet chargé" : "Projet initial"));
   const currentProjectHistoryEntry = projectHistory.entries[projectHistory.cursor];
   const { shape, biotope, dimensions, species, lifeStage, measurements, decorations, nextId } = currentProjectHistoryEntry.project;
+  const previewedCheckpoint = showHistoryTimeline && previewedCheckpointId
+    ? savedProjectCheckpoints.find((checkpoint) => checkpoint.id === previewedCheckpointId) ?? null
+    : null;
   const previewedHistoryEntry = showHistoryTimeline && previewedHistoryCursor !== null
+    && !previewedCheckpoint
     ? projectHistory.entries[previewedHistoryCursor]
     : null;
+  const checkpointToEditableProject = (project: StoredProject): EditableProjectState => ({
+    shape: project.shape,
+    biotope: project.biotope,
+    dimensions: project.dimensions,
+    species: project.species,
+    lifeStage: project.lifeStage ?? "adult",
+    measurements: project.measurements ?? createDefaultMeasurements(),
+    decorations: project.decorations,
+    nextId: project.nextId,
+  });
+  const previewedProject = previewedCheckpoint
+    ? checkpointToEditableProject(previewedCheckpoint.project)
+    : previewedHistoryEntry?.project ?? null;
   const historyPreviewChanges = previewedHistoryEntry
-    ? describeProjectHistoryDifference(currentProjectHistoryEntry.project, previewedHistoryEntry.project)
+    ? describeProjectHistoryDifference(currentProjectHistoryEntry.project, previewedProject!)
+    : previewedCheckpoint
+      ? describeProjectHistoryDifference(currentProjectHistoryEntry.project, previewedProject!)
     : [];
+  useEffect(() => {
+    setSavedProjectCheckpoints(projectId ? readSavedProjectCheckpoints(projectId, speciesLabels) : []);
+    setPreviewedCheckpointId(null);
+  }, [projectId]);
   const updateProjectHistory = (update: (current: EditableProjectState) => EditableProjectState, groupKey?: string, label = "Modifier le projet") => {
     setPreviewedHistoryCursor(null);
+    setPreviewedCheckpointId(null);
     dispatchProjectHistory({ type: "set", update, label, ...(groupKey ? { groupKey } : {}) });
   };
   const replaceProjectState = (project: EditableProjectState, label = "Projet chargé") => {
     setPreviewedHistoryCursor(null);
+    setPreviewedCheckpointId(null);
     dispatchProjectHistory({ type: "replace", project, label });
   };
   const finishProjectHistoryGroup = () => dispatchProjectHistory({ type: "finish-group" });
@@ -152,6 +186,11 @@ function App() {
     if (previewedHistoryCursor === null) return;
     dispatchProjectHistory({ type: "jump", cursor: previewedHistoryCursor });
     setPreviewedHistoryCursor(null);
+  };
+  const restoreSavedProjectCheckpoint = () => {
+    if (!previewedCheckpoint) return;
+    const restored = checkpointToEditableProject(previewedCheckpoint.project);
+    updateProjectHistory(() => restored, undefined, `Restaurer : ${previewedCheckpoint.label}`);
   };
   const setShape = (value: Shape) => updateProjectHistory((current) => ({ ...current, shape: value }), undefined, `Format : ${value}`);
   const setBiotope = (value: Biotope) => updateProjectHistory((current) => ({ ...current, biotope: value }), undefined, `Biotope : ${value}`);
@@ -363,6 +402,7 @@ function App() {
       setSaveFeedback("Impossible de supprimer la sauvegarde sur cet appareil");
       return;
     }
+    removeSavedProjectCheckpoints(project.id);
 
     setSavedProjects(projects);
     if (isCurrentProject) {
@@ -409,6 +449,33 @@ function App() {
       setSaveStatus("error");
       setSaveFeedback("Sauvegarde impossible sur cet appareil");
     }
+  };
+
+  const saveNamedProjectCheckpoint = () => {
+    if (!projectId) {
+      setCheckpointFeedback("Enregistre le projet avant de créer un point.");
+      return;
+    }
+    const snapshot: StoredProject = {
+      id: projectId,
+      name: projectName.trim() || "Habitat sans titre",
+      shape,
+      biotope,
+      dimensions,
+      species,
+      lifeStage,
+      decorations,
+      nextId,
+      measurements,
+    };
+    const checkpoint = writeProjectCheckpoint(snapshot, checkpointName, speciesLabels);
+    if (!checkpoint) {
+      setCheckpointFeedback("Point non enregistré; vérifie le nom et l’espace de stockage.");
+      return;
+    }
+    setSavedProjectCheckpoints(readSavedProjectCheckpoints(projectId, speciesLabels));
+    setCheckpointName("");
+    setCheckpointFeedback("Point de restauration enregistré.");
   };
 
   const saveProject = () => {
@@ -732,17 +799,30 @@ function App() {
             <span className="stage-dimensions">{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</span>
           </div>
           {showHistoryTimeline && <section className="history-timeline" aria-label="Historique du projet">
-            <header><span><strong>Historique</strong><small>{projectHistory.cursor + 1} / {projectHistory.entries.length}</small></span><button type="button" aria-label="Fermer l’historique" onClick={() => setShowHistoryTimeline(false)}><X size={14} /></button></header>
+            <header><span><strong>Historique</strong><small>{projectHistory.cursor + 1} / {projectHistory.entries.length}</small></span><button type="button" aria-label="Fermer l’historique" onClick={() => { setShowHistoryTimeline(false); setPreviewedHistoryCursor(null); setPreviewedCheckpointId(null); }}><X size={14} /></button></header>
+            <div className="saved-checkpoints">
+              <div className="saved-checkpoints-heading"><strong>Points de restauration</strong><small>{savedProjectCheckpoints.length} / {MAX_SAVED_PROJECT_CHECKPOINTS}</small></div>
+              <div className="checkpoint-save-form">
+                <input type="text" maxLength={60} aria-label="Nom du point de restauration" placeholder={projectId ? "Nom du point" : "Enregistre le projet"} value={checkpointName} disabled={!projectId} onChange={(event) => { setCheckpointName(event.target.value); setCheckpointFeedback(""); }} />
+                <button type="button" disabled={!projectId || !checkpointName.trim()} onClick={saveNamedProjectCheckpoint}><Plus size={12} /> Enregistrer</button>
+              </div>
+              {checkpointFeedback && <small className="checkpoint-feedback" role="status">{checkpointFeedback}</small>}
+              {savedProjectCheckpoints.length > 0 && <ul>{savedProjectCheckpoints.map((checkpoint) => <li key={checkpoint.id}>
+                <button type="button" className={previewedCheckpointId === checkpoint.id ? "selected" : ""} aria-pressed={previewedCheckpointId === checkpoint.id} onClick={() => { setPreviewedHistoryCursor(null); setPreviewedCheckpointId(checkpoint.id); }}>
+                  <span>{checkpoint.label}</span><small>{new Date(checkpoint.createdAt).toLocaleString("fr-FR")}</small>
+                </button>
+              </li>)}</ul>}
+            </div>
             <ol>{projectHistory.entries.map((entry, index) => <li key={index}>
-              <button type="button" className={index === projectHistory.cursor ? "current" : previewedHistoryCursor === index ? "previewed" : ""} aria-current={index === projectHistory.cursor ? "step" : undefined} aria-pressed={previewedHistoryCursor === index} onClick={() => setPreviewedHistoryCursor(index)}>
+              <button type="button" className={index === projectHistory.cursor ? "current" : previewedHistoryCursor === index ? "previewed" : ""} aria-current={index === projectHistory.cursor ? "step" : undefined} aria-pressed={previewedHistoryCursor === index} onClick={() => { setPreviewedCheckpointId(null); setPreviewedHistoryCursor(index); }}>
                 <span>{entry.label}</span><small>{index === projectHistory.cursor ? "Position actuelle" : index < projectHistory.cursor ? "Étape précédente" : "À rétablir"}</small>
               </button>
             </li>)}</ol>
-            {previewedHistoryEntry && <div className="history-preview">
-              <strong>Avant restauration</strong>
+            {previewedProject && <div className="history-preview">
+              <strong>{previewedCheckpoint ? `Avant restauration · ${previewedCheckpoint.label}` : "Avant restauration"}</strong>
               {historyPreviewChanges.length === 0 ? <p>Aucune différence avec l’état actuel.</p> : <ul>{historyPreviewChanges.slice(0, 6).map((change) => <li key={change}>{change}</li>)}</ul>}
               {historyPreviewChanges.length > 6 && <small>+ {historyPreviewChanges.length - 6} autre(s) changement(s)</small>}
-              <div><button type="button" className="history-preview-cancel" onClick={() => setPreviewedHistoryCursor(null)}>Fermer l’aperçu</button><button type="button" className="history-preview-restore" disabled={historyPreviewChanges.length === 0} onClick={restoreProjectHistoryEntry}>Restaurer cet état</button></div>
+              <div><button type="button" className="history-preview-cancel" onClick={() => { setPreviewedHistoryCursor(null); setPreviewedCheckpointId(null); }}>Fermer l’aperçu</button><button type="button" className="history-preview-restore" disabled={historyPreviewChanges.length === 0} onClick={previewedCheckpoint ? restoreSavedProjectCheckpoint : restoreProjectHistoryEntry}>{previewedCheckpoint ? "Restaurer ce point" : "Restaurer cet état"}</button></div>
             </div>}
           </section>}
           <div className="viewport-wrap">

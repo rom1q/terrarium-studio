@@ -8,6 +8,98 @@ import {
 
 const projectsStorageKey = "terrarium-studio-projects";
 const currentProjectStorageKey = "terrarium-studio-current-project";
+const projectCheckpointsStorageKey = "terrarium-studio-project-checkpoints";
+const projectCheckpointsFormat = "terrarium-studio-project-checkpoints";
+const projectCheckpointsVersion = 1;
+
+export const MAX_SAVED_PROJECT_CHECKPOINTS = 12;
+export type SavedProjectCheckpoint = { id: string; projectId: string; label: string; createdAt: string; project: StoredProject };
+
+type ProjectCheckpointCollection = { format: typeof projectCheckpointsFormat; version: typeof projectCheckpointsVersion; projects: Record<string, unknown> };
+type CheckpointStorage = Pick<Storage, "getItem" | "setItem">;
+
+function readProjectCheckpointCollection(storage: CheckpointStorage): ProjectCheckpointCollection | null {
+  try {
+    const stored = storage.getItem(projectCheckpointsStorageKey);
+    if (!stored) return { format: projectCheckpointsFormat, version: projectCheckpointsVersion, projects: {} };
+    const value: unknown = JSON.parse(stored);
+    if (typeof value !== "object" || value === null) return null;
+    const collection = value as Record<string, unknown>;
+    if (collection.format !== projectCheckpointsFormat || collection.version !== projectCheckpointsVersion || typeof collection.projects !== "object" || collection.projects === null || Array.isArray(collection.projects)) return null;
+    return collection as ProjectCheckpointCollection;
+  } catch {
+    return null;
+  }
+}
+
+function parseProjectCheckpoints(value: unknown, projectId: string, allowedSpecies: readonly string[]): SavedProjectCheckpoint[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((candidate): candidate is SavedProjectCheckpoint => {
+    if (typeof candidate !== "object" || candidate === null) return false;
+    const checkpoint = candidate as Record<string, unknown>;
+    return typeof checkpoint.id === "string" && checkpoint.id.length > 0 &&
+      checkpoint.projectId === projectId && typeof checkpoint.label === "string" &&
+      checkpoint.label.trim().length > 0 && checkpoint.label.length <= 60 &&
+      typeof checkpoint.createdAt === "string" && !Number.isNaN(Date.parse(checkpoint.createdAt)) &&
+      isStoredProject(checkpoint.project, allowedSpecies) && checkpoint.project.id === projectId;
+  }).slice(-MAX_SAVED_PROJECT_CHECKPOINTS);
+}
+
+export function readSavedProjectCheckpoints(
+  projectId: string,
+  allowedSpecies: readonly string[],
+  storage: CheckpointStorage = localStorage,
+): SavedProjectCheckpoint[] {
+  if (!projectId) return [];
+  const collection = readProjectCheckpointCollection(storage);
+  return collection ? parseProjectCheckpoints(collection.projects[projectId], projectId, allowedSpecies) : [];
+}
+
+export function writeProjectCheckpoint(
+  project: StoredProject,
+  label: string,
+  allowedSpecies: readonly string[],
+  storage: CheckpointStorage = localStorage,
+): SavedProjectCheckpoint | null {
+  const normalizedLabel = label.trim();
+  if (!normalizedLabel || normalizedLabel.length > 60 || !isStoredProject(project, allowedSpecies)) return null;
+  const collection = readProjectCheckpointCollection(storage);
+  if (!collection) return null;
+
+  const checkpoint: SavedProjectCheckpoint = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    projectId: project.id,
+    label: normalizedLabel,
+    createdAt: new Date().toISOString(),
+    project: JSON.parse(JSON.stringify(project)) as StoredProject,
+  };
+  const existing = parseProjectCheckpoints(collection.projects[project.id], project.id, allowedSpecies);
+  const nextCollection: ProjectCheckpointCollection = {
+    ...collection,
+    projects: { ...collection.projects, [project.id]: [...existing, checkpoint].slice(-MAX_SAVED_PROJECT_CHECKPOINTS) },
+  };
+
+  try {
+    storage.setItem(projectCheckpointsStorageKey, JSON.stringify(nextCollection));
+    return checkpoint;
+  } catch {
+    return null;
+  }
+}
+
+export function removeSavedProjectCheckpoints(projectId: string, storage: CheckpointStorage = localStorage): boolean {
+  const collection = readProjectCheckpointCollection(storage);
+  if (!collection) return false;
+  if (!(projectId in collection.projects)) return true;
+  const projects = { ...collection.projects };
+  delete projects[projectId];
+  try {
+    storage.setItem(projectCheckpointsStorageKey, JSON.stringify({ ...collection, projects }));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function readCurrentProject(allowedSpecies: readonly string[]): StoredProject | null {
   try {
