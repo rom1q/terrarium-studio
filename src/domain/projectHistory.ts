@@ -28,6 +28,69 @@ export function createProjectHistory(project: EditableProjectState, label = "Ét
   return { entries: [{ project, label }], cursor: 0, groupKey: null };
 }
 
+const measurementLabels: Record<keyof Measurements, string> = {
+  hotSideTemperature: "Température zone chaude",
+  coolSideTemperature: "Température zone fraîche",
+  baskingUvi: "UVI basking",
+  coolSideHumidity: "Humidité côté frais",
+};
+
+function toCentimeters(value: number, length: number, normalizedAxis: boolean): number {
+  return Math.round((normalizedAxis ? (value + 1) / 2 : value) * length);
+}
+
+export function describeProjectHistoryDifference(from: EditableProjectState, to: EditableProjectState): string[] {
+  const changes: string[] = [];
+  if (from.shape !== to.shape) changes.push(`Format : ${from.shape} → ${to.shape}`);
+  if (from.biotope !== to.biotope) changes.push(`Biotope : ${from.biotope} → ${to.biotope}`);
+  if (from.dimensions.width !== to.dimensions.width) changes.push(`Largeur : ${from.dimensions.width} → ${to.dimensions.width} cm`);
+  if (from.dimensions.depth !== to.dimensions.depth) changes.push(`Profondeur : ${from.dimensions.depth} → ${to.dimensions.depth} cm`);
+  if (from.dimensions.height !== to.dimensions.height) changes.push(`Hauteur : ${from.dimensions.height} → ${to.dimensions.height} cm`);
+  if (from.species !== to.species) changes.push(`Espèce : ${from.species} → ${to.species}`);
+  if (from.lifeStage !== to.lifeStage) changes.push(`Stade de vie : ${from.lifeStage === "adult" ? "adulte" : "juvénile"} → ${to.lifeStage === "adult" ? "adulte" : "juvénile"}`);
+
+  (Object.keys(measurementLabels) as (keyof Measurements)[]).forEach((key) => {
+    const oldValue = from.measurements[key];
+    const newValue = to.measurements[key];
+    if (oldValue !== newValue) changes.push(`${measurementLabels[key]} : ${oldValue ?? "vide"} → ${newValue ?? "vide"}`);
+  });
+
+  const oldDecorations = new Map(from.decorations.map((item) => [item.id, item]));
+  const newDecorations = new Map(to.decorations.map((item) => [item.id, item]));
+  const decorationIds = new Set([...oldDecorations.keys(), ...newDecorations.keys()]);
+
+  decorationIds.forEach((id) => {
+    const oldItem = oldDecorations.get(id);
+    const newItem = newDecorations.get(id);
+    if (!oldItem && newItem) {
+      changes.push(`${newItem.kind} ${String(id).padStart(2, "0")} ajouté`);
+      return;
+    }
+    if (oldItem && !newItem) {
+      changes.push(`${oldItem.kind} ${String(id).padStart(2, "0")} supprimé`);
+      return;
+    }
+    if (!oldItem || !newItem) return;
+
+    const label = `${oldItem.kind} ${String(id).padStart(2, "0")}`;
+    if (oldItem.variant !== newItem.variant) changes.push(`${label} · variante : ${oldItem.variant ?? "défaut"} → ${newItem.variant ?? "défaut"}`);
+    if (oldItem.plantSpeciesId !== newItem.plantSpeciesId) changes.push(`${label} · espèce botanique modifiée`);
+    if ((oldItem.size ?? 100) !== (newItem.size ?? 100)) changes.push(`${label} · taille : ${oldItem.size ?? 100} → ${newItem.size ?? 100}%`);
+    if ((oldItem.rotation ?? 0) !== (newItem.rotation ?? 0)) changes.push(`${label} · rotation : ${oldItem.rotation ?? 0} → ${newItem.rotation ?? 0}°`);
+
+    const axes = [
+      { key: "x" as const, label: "X", oldCm: toCentimeters(oldItem.position.x, from.dimensions.width, true), newCm: toCentimeters(newItem.position.x, to.dimensions.width, true) },
+      { key: "y" as const, label: "Y", oldCm: toCentimeters(oldItem.position.y ?? 0, from.dimensions.height, false), newCm: toCentimeters(newItem.position.y ?? 0, to.dimensions.height, false) },
+      { key: "z" as const, label: "Z", oldCm: toCentimeters(oldItem.position.z, from.dimensions.depth, true), newCm: toCentimeters(newItem.position.z, to.dimensions.depth, true) },
+    ];
+    axes.forEach(({ key, label: axisLabel, oldCm, newCm }) => {
+      if (oldItem.position[key] !== newItem.position[key] || oldCm !== newCm) changes.push(`${label} · ${axisLabel} : ${oldCm} → ${newCm} cm`);
+    });
+  });
+
+  return changes;
+}
+
 export function projectHistoryReducer(state: ProjectHistory, action: ProjectHistoryAction): ProjectHistory {
   if (action.type === "replace") return createProjectHistory(action.project, action.label ?? "Projet chargé");
 

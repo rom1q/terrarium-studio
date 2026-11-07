@@ -59,7 +59,7 @@ import { DecorationIcon, DecorationPanel, decorationKindClass } from "../feature
 import { TerrariumScene } from "../features/terrarium/TerrariumScene";
 import { applyDecorationLayoutSuggestion } from "../domain/layoutValidation";
 import type { LayoutSuggestion, LayoutWarning } from "../domain/layoutValidation";
-import { createProjectHistory, projectHistoryReducer } from "../domain/projectHistory";
+import { createProjectHistory, describeProjectHistoryDifference, projectHistoryReducer } from "../domain/projectHistory";
 import type { EditableProjectState } from "../domain/projectHistory";
 import {
   clearCurrentProject,
@@ -112,6 +112,7 @@ function App() {
   const [showReport, setShowReport] = useState(false);
   const [draftProjectName, setDraftProjectName] = useState("");
   const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
+  const [previewedHistoryCursor, setPreviewedHistoryCursor] = useState<number | null>(null);
   const [projectHistory, dispatchProjectHistory] = useReducer(projectHistoryReducer, {
     shape: initialProject?.shape ?? "Basse",
     biotope: initialBiotope,
@@ -124,11 +125,34 @@ function App() {
   }, (project) => createProjectHistory(project, initialProject ? "Projet chargé" : "Projet initial"));
   const currentProjectHistoryEntry = projectHistory.entries[projectHistory.cursor];
   const { shape, biotope, dimensions, species, lifeStage, measurements, decorations, nextId } = currentProjectHistoryEntry.project;
+  const previewedHistoryEntry = showHistoryTimeline && previewedHistoryCursor !== null
+    ? projectHistory.entries[previewedHistoryCursor]
+    : null;
+  const historyPreviewChanges = previewedHistoryEntry
+    ? describeProjectHistoryDifference(currentProjectHistoryEntry.project, previewedHistoryEntry.project)
+    : [];
   const updateProjectHistory = (update: (current: EditableProjectState) => EditableProjectState, groupKey?: string, label = "Modifier le projet") => {
+    setPreviewedHistoryCursor(null);
     dispatchProjectHistory({ type: "set", update, label, ...(groupKey ? { groupKey } : {}) });
   };
-  const replaceProjectState = (project: EditableProjectState, label = "Projet chargé") => dispatchProjectHistory({ type: "replace", project, label });
+  const replaceProjectState = (project: EditableProjectState, label = "Projet chargé") => {
+    setPreviewedHistoryCursor(null);
+    dispatchProjectHistory({ type: "replace", project, label });
+  };
   const finishProjectHistoryGroup = () => dispatchProjectHistory({ type: "finish-group" });
+  const undoProjectHistory = () => {
+    setPreviewedHistoryCursor(null);
+    dispatchProjectHistory({ type: "undo" });
+  };
+  const redoProjectHistory = () => {
+    setPreviewedHistoryCursor(null);
+    dispatchProjectHistory({ type: "redo" });
+  };
+  const restoreProjectHistoryEntry = () => {
+    if (previewedHistoryCursor === null) return;
+    dispatchProjectHistory({ type: "jump", cursor: previewedHistoryCursor });
+    setPreviewedHistoryCursor(null);
+  };
   const setShape = (value: Shape) => updateProjectHistory((current) => ({ ...current, shape: value }), undefined, `Format : ${value}`);
   const setBiotope = (value: Biotope) => updateProjectHistory((current) => ({ ...current, biotope: value }), undefined, `Biotope : ${value}`);
   const setLifeStage = (value: LifeStage) => updateProjectHistory((current) => ({ ...current, lifeStage: value }), undefined, `Stade de vie : ${value === "adult" ? "adulte" : "juvénile"}`);
@@ -166,10 +190,10 @@ function App() {
       const key = event.key.toLowerCase();
       if (key === "z" && event.shiftKey || key === "y") {
         event.preventDefault();
-        dispatchProjectHistory({ type: "redo" });
+        redoProjectHistory();
       } else if (key === "z") {
         event.preventDefault();
-        dispatchProjectHistory({ type: "undo" });
+        undoProjectHistory();
       }
     };
 
@@ -699,8 +723,8 @@ function App() {
             <div className="stage-view-controls">
               <div className="view-tabs"><button className={viewMode === "3d" ? "active" : ""} type="button" aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}><Eye size={14} /> Vue 3D</button><button className={viewMode === "plan" ? "active" : ""} type="button" aria-pressed={viewMode === "plan"} onClick={() => setViewMode("plan")}><Ruler size={14} /> Plan</button></div>
               <div className="history-controls" role="group" aria-label="Historique du projet">
-                <button type="button" aria-label="Annuler le changement" aria-keyshortcuts="Control+Z Meta+Z" title="Annuler · Ctrl/Cmd+Z" disabled={!canUndoProject} onClick={() => dispatchProjectHistory({ type: "undo" })}><Undo2 size={15} /></button>
-                <button type="button" aria-label="Rétablir le changement" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Rétablir · Ctrl/Cmd+Shift+Z" disabled={!canRedoProject} onClick={() => dispatchProjectHistory({ type: "redo" })}><Redo2 size={15} /></button>
+                <button type="button" aria-label="Annuler le changement" aria-keyshortcuts="Control+Z Meta+Z" title="Annuler · Ctrl/Cmd+Z" disabled={!canUndoProject} onClick={undoProjectHistory}><Undo2 size={15} /></button>
+                <button type="button" aria-label="Rétablir le changement" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Rétablir · Ctrl/Cmd+Shift+Z" disabled={!canRedoProject} onClick={redoProjectHistory}><Redo2 size={15} /></button>
               </div>
               <button className={`zones-toggle ${showHistoryTimeline ? "active" : ""}`} type="button" aria-label="Afficher l’historique" aria-expanded={showHistoryTimeline} title="Historique du projet" onClick={() => setShowHistoryTimeline((visible) => !visible)}><History size={14} /></button>
               <button className={`zones-toggle ${showHabitatZones ? "active" : ""}`} type="button" aria-pressed={showHabitatZones} onClick={() => setShowHabitatZones((visible) => !visible)}><Layers size={14} /> Zones</button>
@@ -710,10 +734,16 @@ function App() {
           {showHistoryTimeline && <section className="history-timeline" aria-label="Historique du projet">
             <header><span><strong>Historique</strong><small>{projectHistory.cursor + 1} / {projectHistory.entries.length}</small></span><button type="button" aria-label="Fermer l’historique" onClick={() => setShowHistoryTimeline(false)}><X size={14} /></button></header>
             <ol>{projectHistory.entries.map((entry, index) => <li key={index}>
-              <button type="button" className={index === projectHistory.cursor ? "current" : ""} aria-current={index === projectHistory.cursor ? "step" : undefined} onClick={() => dispatchProjectHistory({ type: "jump", cursor: index })}>
+              <button type="button" className={index === projectHistory.cursor ? "current" : previewedHistoryCursor === index ? "previewed" : ""} aria-current={index === projectHistory.cursor ? "step" : undefined} aria-pressed={previewedHistoryCursor === index} onClick={() => setPreviewedHistoryCursor(index)}>
                 <span>{entry.label}</span><small>{index === projectHistory.cursor ? "Position actuelle" : index < projectHistory.cursor ? "Étape précédente" : "À rétablir"}</small>
               </button>
             </li>)}</ol>
+            {previewedHistoryEntry && <div className="history-preview">
+              <strong>Avant restauration</strong>
+              {historyPreviewChanges.length === 0 ? <p>Aucune différence avec l’état actuel.</p> : <ul>{historyPreviewChanges.slice(0, 6).map((change) => <li key={change}>{change}</li>)}</ul>}
+              {historyPreviewChanges.length > 6 && <small>+ {historyPreviewChanges.length - 6} autre(s) changement(s)</small>}
+              <div><button type="button" className="history-preview-cancel" onClick={() => setPreviewedHistoryCursor(null)}>Fermer l’aperçu</button><button type="button" className="history-preview-restore" disabled={historyPreviewChanges.length === 0} onClick={restoreProjectHistoryEntry}>Restaurer cet état</button></div>
+            </div>}
           </section>}
           <div className="viewport-wrap">
             <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} previewedLayoutSuggestion={previewedLayoutSuggestion} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />

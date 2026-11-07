@@ -166,18 +166,29 @@ h1, h2, p { margin-top: 0; }
 .history-controls button:hover:not(:disabled) { background: #edf3e8; }
 .history-controls button:disabled { color: #b6bdb4; cursor: default; }
 .history-controls button:focus-visible { outline: 2px solid #6a876e; outline-offset: 1px; }
-.history-timeline { position: absolute; z-index: 8; top: 48px; left: 0; width: min(320px, 100%); max-height: 300px; overflow: hidden; border: 1px solid #dfe4da; border-radius: 5px; background: #fffefa; color: #526357; box-shadow: 0 8px 24px #29372f20; }
+.history-timeline { position: absolute; z-index: 8; top: 48px; left: 0; width: min(340px, 100%); max-height: 380px; overflow: hidden; border: 1px solid #dfe4da; border-radius: 5px; background: #fffefa; color: #526357; box-shadow: 0 8px 24px #29372f20; }
 .history-timeline > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--line); font-size: 10px; }
 .history-timeline > header > span { display: flex; align-items: center; gap: 8px; }.history-timeline > header small { color: #8e9a8f; font-size: 8px; }
 .history-timeline > header button { display: grid; place-items: center; width: 25px; height: 25px; border: 0; border-radius: 3px; background: transparent; color: #758277; cursor: pointer; }
 .history-timeline > header button:hover { background: #f0f3ed; }
-.history-timeline ol { display: grid; gap: 2px; max-height: 252px; overflow: auto; margin: 0; padding: 5px; list-style: none; }
+.history-timeline ol { display: grid; gap: 2px; max-height: 190px; overflow: auto; margin: 0; padding: 5px; list-style: none; }
 .history-timeline li button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 7px 8px; border: 0; border-radius: 3px; background: transparent; color: #59695d; text-align: left; cursor: pointer; }
 .history-timeline li button.current { background: #edf3e8; color: #405b45; }
+.history-timeline li button.previewed { background: #edf2f3; color: #356a73; }
 .history-timeline li button:hover:not(.current) { background: #f5f7f2; }
 .history-timeline li button span { font-size: 9px; line-height: 1.35; }
 .history-timeline li button small { color: #8b978d; font-size: 8px; }
 .history-timeline button:focus-visible { outline: 2px solid #6a876e; outline-offset: 1px; }
+.history-preview { display: grid; gap: 7px; padding: 9px 10px 10px; border-top: 1px solid var(--line); background: #f9faf7; }
+.history-preview > strong { color: #506257; font-size: 9px; }
+.history-preview ul { display: grid; gap: 4px; max-height: 92px; overflow: auto; margin: 0; padding-left: 15px; color: #6d7a70; font-size: 8px; line-height: 1.4; }
+.history-preview p { margin: 0; color: #879188; font-size: 8px; }
+.history-preview > small { color: #8d978d; font-size: 8px; }
+.history-preview > div { display: flex; justify-content: flex-end; gap: 6px; }
+.history-preview > div button { min-height: 27px; padding: 4px 8px; border: 1px solid #d6dfd4; border-radius: 3px; background: #fffefa; color: #506b56; font: inherit; font-size: 8px; cursor: pointer; }
+.history-preview > div .history-preview-restore { border-color: #49664f; background: #49664f; color: white; }
+.history-preview > div button:disabled { opacity: 0.5; cursor: default; }
+.history-preview > div button:focus-visible { outline: 2px solid #6a876e; outline-offset: 1px; }
 .zones-toggle { height: 32px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid #e0e6dc; border-radius: 4px; background: #fffefa; color: #78847b; font-size: 9px; cursor: pointer; }
 .zones-toggle.active { border-color: #b6c8b3; background: #edf3e8; color: #49664f; }
 .stage-dimensions { font: 500 10px var(--display); color: #89948a; padding-top: 8px; }

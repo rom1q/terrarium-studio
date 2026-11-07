@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProjectHistory, MAX_PROJECT_HISTORY, projectHistoryReducer } from "./projectHistory";
+import { createProjectHistory, describeProjectHistoryDifference, MAX_PROJECT_HISTORY, projectHistoryReducer } from "./projectHistory";
 import type { EditableProjectState } from "./projectHistory";
 
 const project: EditableProjectState = {
@@ -83,5 +83,23 @@ describe("project history", () => {
     expect(jumped.entries[jumped.cursor].label).toBe("Largeur: 140 cm");
     expect(jumped.entries[jumped.cursor].project.dimensions.width).toBe(140);
     expect(branched.entries.slice(branched.cursor + 1)).toEqual([]);
+  });
+
+  it("summarizes setting and decoration changes with before/after values", () => {
+    const next: EditableProjectState = {
+      ...project,
+      dimensions: { ...project.dimensions, width: 140 },
+      biotope: "Tropical",
+      decorations: [
+        { ...project.decorations[0], position: { x: 0.2, z: 0 } },
+        { id: 2, kind: "Plante", position: { x: 0, z: 0 } },
+      ],
+    };
+    const differences = describeProjectHistoryDifference(project, next);
+
+    expect(differences).toContain("Biotope : Désertique → Tropical");
+    expect(differences).toContain("Largeur : 120 → 140 cm");
+    expect(differences).toContain("Roche 01 · X : 60 → 84 cm");
+    expect(differences).toContain("Plante 02 ajouté");
   });
 });
