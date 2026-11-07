@@ -7,6 +7,15 @@ type RockVariant = Extract<DecorationVariant, "Roche anguleuse" | "Galet" | "Str
 function createFacetedGeometry(seed: number, baseColor: number) {
   const geometry = new THREE.DodecahedronGeometry(0.32, 0);
   const positions = geometry.getAttribute("position");
+  for (let vertexIndex = 0; vertexIndex < positions.count; vertexIndex += 1) {
+    const x = positions.getX(vertexIndex);
+    const y = positions.getY(vertexIndex);
+    const z = positions.getZ(vertexIndex);
+    const noise = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 19.19) * 43758.5453;
+    const jitter = 1 + (noise - Math.floor(noise) - 0.5) * 0.08;
+    positions.setXYZ(vertexIndex, x * jitter, y, z * jitter);
+  }
+  geometry.computeVertexNormals();
   const colors = new Float32Array(positions.count * 3);
   const first = new THREE.Vector3();
   const second = new THREE.Vector3();

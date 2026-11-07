@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
+import { rockGeometryProfiles } from "../../domain/decorationGeometry";
 import { createRockModel } from "./decorationModels";
 
 describe("createRockModel", () => {
@@ -27,6 +28,21 @@ describe("createRockModel", () => {
     expect(size.x).toBeGreaterThan(0.7);
     expect(size.y).toBeGreaterThan(0.2);
     expect(size.z).toBeGreaterThan(0.5);
+  });
+
+  it("varies angular rock silhouettes deterministically while keeping their bounds", () => {
+    const rocks = Array.from({ length: 20 }, (_, index) => createRockModel("Roche anguleuse", index + 1));
+    const vertices = (rock: THREE.Group) => ((rock.children[0] as THREE.Mesh).geometry.getAttribute("position").array);
+
+    expect(new Set(rocks.map((rock) => Array.from(vertices(rock)).join(","))).size).toBe(rocks.length);
+    expect(Array.from(vertices(rocks[3]))).toEqual(Array.from(vertices(createRockModel("Roche anguleuse", 4))));
+    for (const rock of rocks) {
+      const bounds = new THREE.Box3().setFromObject(rock);
+      expect(bounds.min.x).toBeGreaterThanOrEqual(-rockGeometryProfiles.angular.bounds.halfWidth);
+      expect(bounds.max.x).toBeLessThanOrEqual(rockGeometryProfiles.angular.bounds.halfWidth);
+      expect(bounds.min.z).toBeGreaterThanOrEqual(-rockGeometryProfiles.angular.bounds.halfDepth);
+      expect(bounds.max.z).toBeLessThanOrEqual(rockGeometryProfiles.angular.bounds.halfDepth);
+    }
   });
 
   it("applies a shared surface relief texture to every rock variant", () => {

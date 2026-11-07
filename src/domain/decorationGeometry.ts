@@ -28,7 +28,7 @@ export const genericPlantProfiles: Record<GenericPlantVariant, { silhouette: Pla
 };
 
 export const rockGeometryProfiles = {
-  angular: { radius: 0.32, scale: [1.2, 0.82, 0.95] as const, rootOffsetY: 0.263, bounds: { halfWidth: 0.42, halfDepth: 0.42, minY: -0.263, maxY: 0.263 } },
+  angular: { radius: 0.32, scale: [1.2, 0.82, 0.95] as const, rootOffsetY: 0.263, bounds: { halfWidth: 0.48, halfDepth: 0.48, minY: -0.263, maxY: 0.263 } },
   pebble: { radius: 0.32, scale: [1.25, 0.72, 0.95] as const, rootOffsetY: 0.2304, bounds: { halfWidth: 0.4, halfDepth: 0.304, minY: -0.2304, maxY: 0.2304 } },
   stratified: {
     rootOffsetY: 0.16,
