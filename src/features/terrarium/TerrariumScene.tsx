@@ -7,6 +7,7 @@ import { getDefaultDecorationVariant, getEquipmentZoneSources, rotateDecoration,
 import { plantCatalog } from "../../data/plantCatalog";
 import { createPlantModel } from "./plantModels";
 import { createRockModel } from "./decorationModels";
+import { createHideModel } from "./hideModels";
 
 type TerrariumSceneProps = {
   shape: Shape;
@@ -166,31 +167,8 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         decorationObjects.push(plant);
         decorationObjectsById.set(item.id, plant);
       } else if (item.kind === "Cachette") {
-        const hide = new THREE.Group();
+        const hide = createHideModel(variant as "Grotte" | "Tronc creux" | "Écorce creuse");
         hide.userData.decorationId = item.id;
-        const isHollowTrunk = variant === "Tronc creux";
-        const body = new THREE.Mesh(
-          isHollowTrunk ? new THREE.CylinderGeometry(0.32, 0.34, 0.95, 12) : new THREE.DodecahedronGeometry(0.42, 0),
-          new THREE.MeshStandardMaterial({ color: variant === "Écorce creuse" ? 0x785a3c : isHollowTrunk ? 0x76513a : 0x88735b, roughness: 1 }),
-        );
-        if (variant === "Écorce creuse") body.scale.set(1.45, 0.38, 1.05);
-        else if (isHollowTrunk) body.scale.set(1, 0.8, 0.9);
-        else body.scale.set(1.25, 0.68, 0.95);
-        if (isHollowTrunk) body.rotation.z = Math.PI / 2;
-        body.position.y = 0.26;
-        hide.add(body);
-        const entrance = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16),
-          new THREE.MeshStandardMaterial({ color: 0x352e27, roughness: 1 }),
-        );
-        if (isHollowTrunk) {
-          entrance.rotation.z = Math.PI / 2;
-          entrance.position.set(0.35, 0.19, 0);
-        } else {
-          entrance.rotation.x = Math.PI / 2;
-          entrance.position.set(0, 0.19, 0.36);
-        }
-        hide.add(entrance);
         hide.scale.setScalar(sizeScale);
         hide.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
         hide.position.set(x, floorY + 0.1 + verticalOffset, z);
