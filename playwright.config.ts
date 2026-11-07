@@ -5,6 +5,7 @@ export default defineConfig({
   testDir: "./e2e",
   testMatch: "**/*.e2e.ts",
   fullyParallel: true,
+  workers: 2,
   reporter: "list",
   use: {
     ...devices["Desktop Chrome"],

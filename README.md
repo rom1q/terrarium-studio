@@ -45,6 +45,6 @@ npm run build
 ## À poursuivre
 
 - Compléter les profils de stade pour les autres espèces à partir de références spécifiques et vérifiables.
-- Étendre les tests navigateur aux workflows d'édition, d'import/export et de rapport.
+- Couvrir les erreurs d'import JSON et la gestion des projets enregistrés dans les tests navigateur.
 
 Les alertes doivent rester explicables, citer leurs références et distinguer un manque de données d'une non-conformité confirmée.

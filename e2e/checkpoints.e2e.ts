@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 test("a named checkpoint survives reload and restores the project", async ({ page }) => {
   await page.goto("/");
@@ -43,10 +44,62 @@ test("a crested gecko hatchling uses its sourced stage profile", async ({ page }
   await page.getByRole("button", { name: "Voir le rapport" }).click();
   const report = page.getByRole("dialog", { name: "Habitat sans titre" });
   await expect(report.getByText("Nouveau-né", { exact: true })).toBeVisible();
+  await expect(report.getByText("Gecko à crête · Nouveau-né · Correlophus ciliatus", { exact: true })).toBeVisible();
 
   const dimensionCheck = report.locator(".report-check").filter({ hasText: "Dimensions minimales" });
   await expect(dimensionCheck).toContainText("min. 30.48 × 30.48 × 30.48 cm");
   await expect(dimensionCheck).toContainText("Profil ReptiFiles pour hatchling de moins de 12 g.");
   await expect(report.getByRole("link", { name: /Enclosure Size & Cohabitation/ })).toBeVisible();
   await expect(report.getByRole("link", { name: /Lighting, Heating & Humidity/ })).toBeVisible();
+});
+
+test("edited dimensions and readings appear in the report", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Largeur en centimètres").fill("130");
+  await page.getByLabel("Largeur en centimètres").press("Tab");
+  await page.getByLabel("Température zone chaude en degrés").fill("43");
+  await page.getByLabel("Température zone chaude en degrés").press("Tab");
+
+  await page.getByRole("button", { name: "Voir le rapport" }).click();
+  const report = page.getByRole("dialog", { name: "Habitat sans titre" });
+  const dimensions = report.locator(".report-facts div").filter({ hasText: "Dimensions intérieures" });
+  const hotSideCheck = report.locator(".report-check").filter({ hasText: "Zone chaude" });
+
+  await expect(dimensions).toContainText("130 × 60 × 80 cm");
+  await expect(hotSideCheck).toContainText("43 °C · hors plage 38–42 °C");
+});
+
+test("JSON export and import preserve edited data and life stage", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Espèce de reptile ou amphibien").selectOption({ label: "Correlophus ciliatus · Gecko à crête" });
+  const stages = page.getByRole("group", { name: "Stade de vie" });
+  await stages.getByRole("button", { name: "Nouveau-né" }).click();
+  await page.getByLabel("Largeur en centimètres").fill("140");
+  await page.getByLabel("Largeur en centimètres").press("Tab");
+
+  const projectMenu = page.locator(".project-menu");
+  await projectMenu.locator("summary").click();
+  const downloadPromise = page.waitForEvent("download");
+  await projectMenu.getByRole("button", { name: "Exporter en JSON" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.json$/);
+  const downloadPath = await download.path();
+  if (!downloadPath) throw new Error("Project download path not available");
+  const exportedProject = JSON.parse(await readFile(downloadPath, "utf8")) as {
+    format: string;
+    project: { dimensions: { width: number }; lifeStage: string; species: string };
+  };
+
+  expect(exportedProject.format).toBe("terrarium-studio-project");
+  expect(exportedProject.project.dimensions.width).toBe(140);
+  expect(exportedProject.project.lifeStage).toBe("hatchling");
+  expect(exportedProject.project.species).toBe("Correlophus ciliatus · Gecko à crête");
+
+  await page.getByLabel("Largeur en centimètres").fill("100");
+  await page.getByLabel("Largeur en centimètres").press("Tab");
+  await stages.getByRole("button", { name: "Adulte" }).click();
+  await page.locator('input[aria-label="Fichier de projet JSON"]').setInputFiles(downloadPath);
+
+  await expect(page.getByLabel("Largeur en centimètres")).toHaveValue("140");
+  await expect(stages.getByRole("button", { name: "Nouveau-né" })).toHaveAttribute("aria-pressed", "true");
 });

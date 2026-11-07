@@ -949,7 +949,7 @@ function App() {
         <div className="dialog-backdrop report-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowReport(false); }}>
           <section className="project-report" role="dialog" aria-modal="true" aria-labelledby="report-title">
             <header className="report-header">
-              <div><p className="eyebrow">RAPPORT D'HABITAT · {new Date().toLocaleDateString("fr-FR")}</p><h2 id="report-title">{projectName}</h2><p>{selectedSpecies.commonName} · {lifeStage === "adult" ? "Adulte" : "Juvénile"} · <i>{selectedSpecies.scientificName}</i></p></div>
+              <div><p className="eyebrow">RAPPORT D'HABITAT · {new Date().toLocaleDateString("fr-FR")}</p><h2 id="report-title">{projectName}</h2><p>{selectedSpecies.commonName} · {getLifeStageLabel(lifeStage)} · <i>{selectedSpecies.scientificName}</i></p></div>
               <button type="button" className="report-close" aria-label="Fermer le rapport" autoFocus onClick={() => setShowReport(false)}><X size={17} /></button>
             </header>
             <dl className="report-facts">
