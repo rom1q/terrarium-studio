@@ -2,10 +2,13 @@ import { plantCatalog } from "../data/plantCatalog";
 import type { Biotope, Decoration, DecorationVariant, Shape } from "./projectLogic";
 
 export type TerrariumSceneDimensions = { width: number; depth: number; height: number };
-export type DecorationLayoutWarnings = { boundaries: string[]; clearances: string[] };
+export type LayoutBounds = { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
+export type LayoutWarningType = "boundary" | "overlap" | "entry";
+export type LayoutWarning = { id: string; type: LayoutWarningType; decorationIds: number[]; message: string; bounds: LayoutBounds[] };
+export type DecorationLayoutWarnings = { boundaries: LayoutWarning[]; clearances: LayoutWarning[] };
 
 type LocalBounds = { halfWidth: number; halfDepth: number; minY: number; maxY: number };
-type Bounds3D = { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
+type Bounds3D = LayoutBounds;
 type PositionedBounds = { item: Decoration; label: string; bounds: Bounds3D };
 type HideOpening = { x: number; z: number; axis: "x" | "z"; halfWidth: number; halfDepth: number; minY: number; maxY: number };
 
@@ -168,9 +171,9 @@ function intersects(first: Bounds3D, second: Bounds3D, toleranceCm = 1): boolean
     overlapOnAxis(first.minZ, first.maxZ, second.minZ, second.maxZ) > toleranceCm;
 }
 
-function summarize(warnings: string[], safeDetail: string): string {
+function summarize(warnings: LayoutWarning[], safeDetail: string): string {
   if (warnings.length === 0) return safeDetail;
-  const visibleWarnings = warnings.slice(0, 3);
+  const visibleWarnings = warnings.slice(0, 3).map((warning) => warning.message);
   if (warnings.length > visibleWarnings.length) visibleWarnings.push(`+ ${warnings.length - visibleWarnings.length} autre(s)`);
   return visibleWarnings.join(" · ");
 }
@@ -187,10 +190,10 @@ export function analyzeDecorationLayout(
 
   const sceneDimensions = getTerrariumSceneDimensions(shape, dimensions);
   const objects = decorations.map((item, index) => getPositionedBounds(item, `${item.kind} ${String(index + 1).padStart(2, "0")}`, dimensions, sceneDimensions, biotope));
-  const boundaries: string[] = [];
-  const clearances: string[] = [];
+  const boundaries: LayoutWarning[] = [];
+  const clearances: LayoutWarning[] = [];
 
-  objects.forEach(({ bounds, label }) => {
+  objects.forEach(({ item, bounds, label }) => {
     const exceeded: string[] = [];
     const addExceedance = (side: string, centimeters: number) => {
       if (centimeters > 1) exceeded.push(`${Math.ceil(centimeters)} cm ${side}`);
@@ -201,14 +204,30 @@ export function analyzeDecorationLayout(
     addExceedance("paroi avant", bounds.maxZ - dimensions.depth);
     addExceedance("sous le sol", -bounds.minY);
     addExceedance("au-dessus du plafond", bounds.maxY - dimensions.height);
-    if (exceeded.length > 0) boundaries.push(`${label} dépasse de ${exceeded.join(" et ")}`);
+    if (exceeded.length > 0) {
+      boundaries.push({
+        id: `boundary:${item.id}`,
+        type: "boundary",
+        decorationIds: [item.id],
+        message: `${label} dépasse de ${exceeded.join(" et ")}`,
+        bounds: [bounds],
+      });
+    }
   });
 
   for (let firstIndex = 0; firstIndex < objects.length; firstIndex += 1) {
     const first = objects[firstIndex];
     for (let secondIndex = firstIndex + 1; secondIndex < objects.length; secondIndex += 1) {
       const second = objects[secondIndex];
-      if (intersects(first.bounds, second.bounds)) clearances.push(`${first.label} chevauche ${second.label}`);
+      if (intersects(first.bounds, second.bounds)) {
+        clearances.push({
+          id: `overlap:${first.item.id}:${second.item.id}`,
+          type: "overlap",
+          decorationIds: [first.item.id, second.item.id],
+          message: `${first.label} chevauche ${second.label}`,
+          bounds: [first.bounds, second.bounds],
+        });
+      }
     }
   }
 
@@ -217,7 +236,13 @@ export function analyzeDecorationLayout(
       const openingBounds = getOpeningBounds(item, opening, dimensions, sceneDimensions);
       const blocker = objects.find((candidate) => candidate.item.id !== item.id && intersects(openingBounds, candidate.bounds, 2));
       if (blocker) {
-        clearances.push(`entrée de ${label} obstruée par ${blocker.label}`);
+        clearances.push({
+          id: `entry:${item.id}:${blocker.item.id}`,
+          type: "entry",
+          decorationIds: [item.id, blocker.item.id],
+          message: `entrée de ${label} obstruée par ${blocker.label}`,
+          bounds: [openingBounds, blocker.bounds],
+        });
         break;
       }
     }

@@ -1,5 +1,5 @@
 import { plantCatalog } from "../data/plantCatalog";
-import { analyzeDecorationLayout, formatDecorationLayoutWarnings } from "./layoutValidation";
+import { analyzeDecorationLayout, formatDecorationLayoutWarnings, type LayoutWarning } from "./layoutValidation";
 
 export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
@@ -81,7 +81,7 @@ export type StoredProject = {
   measurements?: Measurements;
 };
 export type ProjectExport = { format: "terrarium-studio-project"; version: 1; exportedAt: string; project: StoredProject };
-export type ProjectCheck = { label: string; status: CheckStatus; detail: string };
+export type ProjectCheck = { label: string; status: CheckStatus; detail: string; issues?: LayoutWarning[] };
 export type ProjectCheckSummary = {
   checks: ProjectCheck[];
   hasInsufficientCheck: boolean;
@@ -311,11 +311,13 @@ export function calculateProjectChecks({ species, dimensions, shape = "Basse", b
       label: "Parois, sol et plafond",
       status: layoutWarnings.boundaries.length === 0 ? "met" : "attention",
       detail: layoutDetails.boundaries,
+      issues: layoutWarnings.boundaries,
     },
     {
       label: "Chevauchements et entrées",
       status: layoutWarnings.clearances.length === 0 ? "met" : "attention",
       detail: layoutDetails.clearances,
+      issues: layoutWarnings.clearances,
     },
   ];
   const rangeCheck = (label: string, key: MeasurementKey, unit: string): ProjectCheck => {

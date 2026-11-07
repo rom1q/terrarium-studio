@@ -8,7 +8,7 @@ import { plantCatalog } from "../../data/plantCatalog";
 import { createPlantModel } from "./plantModels";
 import { createRockModel } from "./decorationModels";
 import { createHideModel } from "./hideModels";
-import { getTerrariumSceneDimensions } from "../../domain/layoutValidation";
+import { getTerrariumSceneDimensions, type LayoutWarning } from "../../domain/layoutValidation";
 
 type TerrariumSceneProps = {
   shape: Shape;
@@ -21,6 +21,7 @@ type TerrariumSceneProps = {
   selectedSpecies: SpeciesProfile;
   habitatZoneGuidance: HabitatZoneGuidance[];
   showHabitatZones: boolean;
+  activeLayoutWarning: LayoutWarning | null;
   onDecorationSelectionChange: (id: number | null) => void;
   onDecorationsChange: Dispatch<SetStateAction<Decoration[]>>;
 };
@@ -35,12 +36,15 @@ function getPlantProfile(id: string | undefined) {
   return id ? plantCatalog.find((plant) => plant.id === id) : undefined;
 }
 
-export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
+export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const selectionHandlerRef = useRef(onDecorationSelectionChange);
   const selectedDecorationIdRef = useRef(selectedDecorationId);
+  const activeLayoutWarningRef = useRef(activeLayoutWarning);
+  const activeLayoutWarningKey = activeLayoutWarning ? JSON.stringify(activeLayoutWarning) : "";
   selectionHandlerRef.current = onDecorationSelectionChange;
   selectedDecorationIdRef.current = selectedDecorationId;
+  activeLayoutWarningRef.current = activeLayoutWarning;
 
   useEffect(() => {
     const host = viewportRef.current;
@@ -356,6 +360,33 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     scene.add(transformControls.getHelper());
     const selectedObject = selectedDecorationIdRef.current === null ? undefined : decorationObjectsById.get(selectedDecorationIdRef.current);
     if (viewMode === "3d" && selectedObject) transformControls.attach(selectedObject);
+    const layoutWarning = activeLayoutWarningRef.current;
+    if (viewMode === "3d" && layoutWarning) {
+      layoutWarning.bounds.forEach((bounds, index) => {
+        const toWorldX = (centimeters: number) => (centimeters / dimensions.width - 0.5) * width;
+        const toWorldY = (centimeters: number) => floorY + 0.1 + centimeters / dimensions.height * height;
+        const toWorldZ = (centimeters: number) => (centimeters / dimensions.depth - 0.5) * depth;
+        const box = new THREE.Box3(
+          new THREE.Vector3(toWorldX(bounds.minX), toWorldY(bounds.minY), toWorldZ(bounds.minZ)),
+          new THREE.Vector3(toWorldX(bounds.maxX), toWorldY(bounds.maxY), toWorldZ(bounds.maxZ)),
+        );
+        const color = layoutWarning.type === "boundary" || index === 0 ? 0xc65342 : 0xe0a44c;
+        const helper = new THREE.Box3Helper(box, color);
+        const material = helper.material as THREE.LineBasicMaterial;
+        material.depthTest = false;
+        material.transparent = true;
+        material.opacity = 0.9;
+        helper.renderOrder = 10;
+        scene.add(helper);
+      });
+      const focusObject = decorationObjectsById.get(layoutWarning.decorationIds[0]);
+      if (focusObject) {
+        const focusPosition = focusObject.getWorldPosition(new THREE.Vector3());
+        const cameraOffset = camera.position.clone().sub(controls.target);
+        controls.target.copy(focusPosition);
+        camera.position.copy(focusPosition).add(cameraOffset);
+      }
+    }
     transformControls.addEventListener("dragging-changed", (event) => {
       controls.enabled = !event.value;
     });
@@ -510,7 +541,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         }
       });
     };
-  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones]);
+  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarningKey]);
 
   return <div className="viewport" ref={viewportRef} data-mode={viewMode} />;
 }

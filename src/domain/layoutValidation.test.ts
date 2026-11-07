@@ -9,7 +9,9 @@ describe("decoration layout validation", () => {
     const rock: Decoration = { id: 1, kind: "Roche", position: { x: 1, z: 0 }, size: 125, rotation: 45 };
     const warnings = analyzeDecorationLayout([rock], dimensions, "Basse");
 
-    expect(warnings.boundaries.some((warning) => warning.includes("paroi droite"))).toBe(true);
+    expect(warnings.boundaries.some((warning) => warning.message.includes("paroi droite"))).toBe(true);
+    expect(warnings.boundaries[0].decorationIds).toEqual([1]);
+    expect(warnings.boundaries[0].bounds).toHaveLength(1);
     expect(formatDecorationLayoutWarnings(warnings).boundaries).toContain("Roche 01");
   });
 
@@ -20,11 +22,11 @@ describe("decoration layout validation", () => {
       { id: 3, kind: "Roche", position: { x: 0, z: -1 } },
       { id: 4, kind: "Roche", position: { x: 0, z: 1 } },
     ];
-    const wallWarnings = analyzeDecorationLayout(edgeDecorations, dimensions, "Basse").boundaries.join(" ");
+    const wallWarnings = analyzeDecorationLayout(edgeDecorations, dimensions, "Basse").boundaries.map((warning) => warning.message).join(" ");
     const verticalWarnings = analyzeDecorationLayout([
       { id: 5, kind: "Lampe chauffante", position: { x: 0, y: 0, z: 0 } },
       { id: 6, kind: "Lampe chauffante", position: { x: 0, y: 1, z: 0 } },
-    ], dimensions, "Basse").boundaries.join(" ");
+    ], dimensions, "Basse").boundaries.map((warning) => warning.message).join(" ");
 
     expect(wallWarnings).toContain("paroi gauche");
     expect(wallWarnings).toContain("paroi droite");
@@ -39,8 +41,10 @@ describe("decoration layout validation", () => {
     const rock: Decoration = { id: 2, kind: "Roche", position: { x: 0, z: 0.6 } };
     const warnings = analyzeDecorationLayout([hide, rock], dimensions, "Basse");
 
-    expect(warnings.clearances.some((warning) => warning.includes("chevauche"))).toBe(true);
-    expect(warnings.clearances.some((warning) => warning.includes("entrée de Cachette 01 obstruée"))).toBe(true);
+    expect(warnings.clearances.some((warning) => warning.message.includes("chevauche"))).toBe(true);
+    const entryWarning = warnings.clearances.find((warning) => warning.message.includes("entrée de Cachette 01 obstruée"));
+    expect(entryWarning?.decorationIds).toEqual([1, 2]);
+    expect(entryWarning?.bounds).toHaveLength(2);
   });
 
   it("allows vertically separated stacking and centered objects within all walls", () => {

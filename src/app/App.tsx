@@ -53,6 +53,7 @@ import { getPlantProfile } from "../data/plantCatalog";
 import { speciesCatalog as speciesList, speciesLabels } from "../data/speciesCatalog";
 import { DecorationIcon, DecorationPanel, decorationKindClass } from "../features/terrarium/DecorationPanel";
 import { TerrariumScene } from "../features/terrarium/TerrariumScene";
+import type { LayoutWarning } from "../domain/layoutValidation";
 import {
   clearCurrentProject,
   downloadProjectExport,
@@ -115,12 +116,17 @@ function App() {
   const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
   const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
   const selectedDecorationIdRef = useRef<number | null>(null);
+  const [activeLayoutWarningId, setActiveLayoutWarningId] = useState<string | null>(null);
   const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
   const [decorations, setDecorations] = useState<Decoration[]>(initialProject?.decorations ?? createDefaultDecorations());
   const [nextId, setNextId] = useState(initialProject?.nextId ?? 4);
   const selectDecoration = (id: number | null) => {
     selectedDecorationIdRef.current = id;
     setSelectedDecorationId(id);
+  };
+  const handleSceneDecorationSelection = (id: number | null) => {
+    setActiveLayoutWarningId(null);
+    selectDecoration(id);
   };
 
   useEffect(() => {
@@ -452,6 +458,12 @@ function App() {
 
   const selectedBiotopeGuidance = getBiotopeGuidance(selectedSpecies, biotope);
   const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, shape, biotope, decorations, measurements, lifeStage });
+  const activeLayoutWarning = checks.flatMap((check) => check.issues ?? []).find((warning) => warning.id === activeLayoutWarningId) ?? null;
+  const showLayoutWarning = (warning: LayoutWarning) => {
+    setViewMode("3d");
+    setActiveLayoutWarningId(warning.id);
+    selectDecoration(warning.decorationIds[0] ?? null);
+  };
   const checkStatusLabels: Record<CheckStatus, string> = {
     met: "Repère atteint",
     insufficient: "À compléter",
@@ -607,7 +619,7 @@ function App() {
             <span className="stage-dimensions">{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</span>
           </div>
           <div className="viewport-wrap">
-            <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} onDecorationSelectionChange={selectDecoration} onDecorationsChange={setDecorations} />
+            <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />
             <div className="viewport-label"><span className="live-dot" /> {viewMode === "plan" ? "VUE EN PLAN" : "APERÇU EN DIRECT"}</div>
             <div className="viewport-tools"><button type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={16} /></button></div>
             {showHabitatZones && <div className="habitat-zone-guide" aria-label="Disponibilité des zones selon les sources">
@@ -636,7 +648,16 @@ function App() {
           <div className="selected-species"><p className="field-label">ESPÈCE SÉLECTIONNÉE</p><strong>{selectedSpecies.commonName}</strong><span>{selectedSpecies.scientificName}</span></div>
           <div className="species-source"><p className="field-label">RÉFÉRENCE</p>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><small>Consultée le {selectedSpecies.source.checkedAt}</small></> : <span>Aucune référence vérifiée. Ces points restent inconnus.</span>}</div>
           <div className="checklist-heading"><span>Points à vérifier</span><span className="checklist-line" /></div>
-          {checks.map((check) => <div className="check-row" key={check.label}><span className={`check-icon ${check.status}`}>{check.status === "met" ? <Check size={14} /> : check.status === "insufficient" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span><span>{check.label}</span><small>{check.detail}</small></div>)}
+          {checks.map((check) => {
+            const warnings = check.issues ?? [];
+            const icon = <span className={`check-icon ${check.status}`}>{check.status === "met" ? <Check size={14} /> : check.status === "insufficient" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span>;
+            return warnings.length > 0
+              ? <div className="check-warning-group" key={check.label}>
+                <div className="check-row">{icon}<span>{check.label}</span><small>{warnings.length} alerte{warnings.length > 1 ? "s" : ""}</small></div>
+                {warnings.map((warning) => <button className="check-row check-row-action" key={warning.id} type="button" title="Afficher les volumes en 3D" aria-label={`Afficher en 3D : ${warning.message}`} onClick={() => showLayoutWarning(warning)}><span>{warning.message}</span><Eye size={13} aria-hidden="true" /></button>)}
+              </div>
+              : <div className="check-row" key={check.label}>{icon}<span>{check.label}</span><small>{check.detail}</small></div>;
+          })}
           <div className="report-note"><AlertTriangle size={15} /><p>Les repères affichés sont partiels et ne certifient pas un habitat. Consultez la source complète et un vétérinaire spécialisé avant toute décision.</p></div>
           <div className="habitat-summary"><p className="field-label">RÉCAPITULATIF</p><div><span>Type</span><strong>{biotope}</strong></div><div><span>Volume</span><strong>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</strong></div><div><span>Décor</span><strong>{decorations.length} éléments</strong></div></div>
           <button className="review-button" type="button" onClick={() => setShowReport(true)}><FileText size={15} /> Voir le rapport</button>
