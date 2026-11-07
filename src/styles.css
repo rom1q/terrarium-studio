@@ -86,8 +86,8 @@ h1, h2, p { margin-top: 0; }
 .biotope-icon { color: #7d9475; width: 18px; display: grid; place-items: center; }
 .option-check { margin-left: auto; color: #59775c; }
 .count-pill { margin-left: auto; background: #eef2ea; color: #687966; border-radius: 12px; padding: 2px 7px; font: 500 9px var(--sans); }
-.decor-tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
-.decor-tools button { display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; border: 1px solid #e6e9e2; color: #617065; background: #fff; border-radius: 4px; height: 31px; font-size: 9px; cursor: pointer; }
+.decor-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; min-width: 0; }
+.decor-tools button { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; width: 100%; min-height: 31px; padding: 4px 3px; white-space: normal; text-align: center; line-height: 1.2; border: 1px solid #e6e9e2; color: #617065; background: #fff; border-radius: 4px; font-size: 9px; cursor: pointer; }
 .decor-tools button:hover { border-color: #9baa95; background: #f5f7f2; }
 .decor-tools button > svg:first-child { color: #98a495; }
 .decor-variant-note { margin: 7px 0 0; color: #9aa39a; font-size: 8px; line-height: 1.4; }
