@@ -96,6 +96,7 @@ h1, h2, p { margin-top: 0; }
 .plant-profile-note.not-recommended { border-color: #b9855c; background: #faf4ed; }
 .plant-profile-note.unknown { border-color: #a4aaa2; }
 .plant-profile-note small, .plant-profile-note a, .plant-report-source { color: #89948a; font-size: 7px; line-height: 1.4; }
+.plant-profile-note .plant-toxicity-note { color: #995840; }
 .plant-profile-note a, .plant-report-source { width: fit-content; color: #526e56; text-underline-offset: 2px; }
 .rock-icon { display: inline-block; width: 11px; height: 9px; background: #a69783; clip-path: polygon(18% 0, 83% 12%, 100% 100%, 0 100%); }
 .decor-list { display: grid; gap: 2px; margin-top: 9px; }
@@ -114,6 +115,7 @@ h1, h2, p { margin-top: 0; }
 .transform-modes { display: flex; gap: 2px; padding: 2px; border-radius: 4px; background: #edf0e9; }
 .transform-tools .transform-delete:hover { border-color: #e7c9bd; background: #fbefeb; color: #995840; }
 .decor-variant-control { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 5px; min-width: 0; color: #89948a; font-size: 8px; }
+.decor-variant-control.plant-species-control { grid-template-columns: 62px minmax(0, 1fr); }
 .decor-variant-control select { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid #e6e9e1; border-radius: 4px; background: #fff; color: #354238; font-size: 9px; }
 .decor-coordinate-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
 .decor-coordinate-grid label { display: grid; gap: 3px; min-width: 0; color: #89948a; font-size: 8px; }

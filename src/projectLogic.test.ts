@@ -365,6 +365,14 @@ describe("saved project management", () => {
 });
 
 describe("botanical plant catalog", () => {
+  it("offers a broad, balanced plant choice by growing conditions", () => {
+    expect(plantCatalog).toHaveLength(12);
+    expect(plantCatalog.filter((plant) => getPlantBiotopeStatus(plant, "Désertique") === "recommended")).toHaveLength(3);
+    expect(plantCatalog.filter((plant) => getPlantBiotopeStatus(plant, "Tropical") === "recommended")).toHaveLength(6);
+    expect(plantCatalog.filter((plant) => getPlantBiotopeStatus(plant, "Paludarium") === "recommended")).toHaveLength(3);
+    expect(plantCatalog.find((plant) => plant.id === "aloe-vera")?.toxicityNote).toContain("reptiles n’est pas documentée");
+  });
+
   it("recommends plants from sourced growing conditions without asserting reptile safety", () => {
     const fern = plantCatalog.find((plant) => plant.id === "nephrolepis-exaltata");
     const succulent = plantCatalog.find((plant) => plant.id === "echeveria-elegans");
