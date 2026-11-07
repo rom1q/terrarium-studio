@@ -102,4 +102,10 @@ describe("project history", () => {
     expect(differences).toContain("Roche 01 · X : 60 → 84 cm");
     expect(differences).toContain("Plante 02 ajouté");
   });
+
+  it("labels hatchling changes in history differences", () => {
+    const differences = describeProjectHistoryDifference(project, { ...project, lifeStage: "hatchling" });
+
+    expect(differences).toContain("Stade de vie : adulte → nouveau-né");
+  });
 });

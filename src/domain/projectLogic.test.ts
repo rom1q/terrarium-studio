@@ -7,6 +7,7 @@ import {
   getEquipmentZoneSources,
   getBiotopeGuidance,
   getHabitatZoneGuidance,
+  getSpeciesStageProfile,
   getPlantBiotopeStatus,
   getDecorationVariantsForBiotope,
   getDefaultDecorationVariant,
@@ -87,6 +88,12 @@ describe("project export validation", () => {
     expect(parseProjectExport({ ...projectExport, project: juvenileProject }, speciesLabels)?.lifeStage).toBe("juvenile");
   });
 
+  it("preserves a hatchling stage in project exports", () => {
+    const hatchlingProject = { ...project, lifeStage: "hatchling" as const };
+
+    expect(parseProjectExport({ ...projectExport, project: hatchlingProject }, speciesLabels)?.lifeStage).toBe("hatchling");
+  });
+
   it("accepts older projects without measurements", () => {
     const { measurements: _measurements, lifeStage: _lifeStage, ...legacyProject } = project;
     expect(isStoredProject(legacyProject, speciesLabels)).toBe(true);
@@ -96,7 +103,7 @@ describe("project export validation", () => {
   it.each([
     ["unsupported version", { ...projectExport, version: 2 }],
     ["invalid timestamp", { ...projectExport, exportedAt: "not-a-date" }],
-    ["invalid life stage", { ...projectExport, project: { ...project, lifeStage: "hatchling" } }],
+    ["invalid life stage", { ...projectExport, project: { ...project, lifeStage: "unknown" } }],
     ["unknown species", { ...projectExport, project: { ...project, species: "Unknown species" } }],
     ["oversized dimensions", { ...projectExport, project: { ...project, dimensions: { ...project.dimensions, width: 1001 } } }],
     ["position outside terrarium", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], position: { x: 1.1, z: 0 } }] } }],
@@ -199,6 +206,39 @@ describe("project checks", () => {
 
     expect(result.checks.filter((check) => !["Parois, sol et plafond", "Chevauchements et entrées"].includes(check.label)).every((check) => check.status === "unknown")).toBe(true);
     expect(result.overallStatus).toBe("À documenter");
+  });
+
+  it("uses documented stage thresholds without inheriting missing adult checks", () => {
+    const stageSpecificSpecies: SpeciesProfile = {
+      ...pogona,
+      stageProfiles: {
+        juvenile: {
+          minimumDimensions: { width: 60, depth: 30, height: 40 },
+          referenceRanges: { hotSideTemperature: [35, 38] },
+          hidesAtBothEnds: null,
+        },
+      },
+    };
+    const result = calculateProjectChecks({
+      species: stageSpecificSpecies,
+      lifeStage: "juvenile",
+      dimensions: { width: 60, depth: 30, height: 40 },
+      decorations: [],
+      measurements: { ...measurements, hotSideTemperature: 36 },
+    });
+
+    expect(result.checks.find((check) => check.label === "Dimensions minimales")?.status).toBe("met");
+    expect(result.checks.find((check) => check.label === "Zone chaude")?.status).toBe("met");
+    expect(result.checks.find((check) => check.label === "Zone fraîche")?.status).toBe("unknown");
+    expect(result.checks.find((check) => check.label === "Cachettes aux deux extrémités")?.status).toBe("unknown");
+  });
+
+  it("resolves absent hatchling data to unknown rather than adult thresholds", () => {
+    const stageProfile = getSpeciesStageProfile(pogona, "hatchling");
+
+    expect(stageProfile.minimumDimensions).toBeNull();
+    expect(stageProfile.referenceRanges).toBeNull();
+    expect(stageProfile.hidesAtBothEnds).toBeNull();
   });
 });
 

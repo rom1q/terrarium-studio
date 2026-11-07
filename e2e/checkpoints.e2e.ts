@@ -29,3 +29,24 @@ test("a named checkpoint survives reload and restores the project", async ({ pag
 
   await expect(page.getByLabel("Largeur en centimètres")).toHaveValue("120");
 });
+
+test("a crested gecko hatchling uses its sourced stage profile", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Espèce de reptile ou amphibien").selectOption({ label: "Correlophus ciliatus · Gecko à crête" });
+
+  const stages = page.getByRole("group", { name: "Stade de vie" });
+  await stages.getByRole("button", { name: "Nouveau-né" }).click();
+  await expect(stages.getByRole("button", { name: "Nouveau-né" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText(/ne doit pas dépasser 29 °C/)).toBeVisible();
+  await expect(page.getByText(/Aucune plage de mesure chiffrée vérifiée pour nouveau-né/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Voir le rapport" }).click();
+  const report = page.getByRole("dialog", { name: "Habitat sans titre" });
+  await expect(report.getByText("Nouveau-né", { exact: true })).toBeVisible();
+
+  const dimensionCheck = report.locator(".report-check").filter({ hasText: "Dimensions minimales" });
+  await expect(dimensionCheck).toContainText("min. 30.48 × 30.48 × 30.48 cm");
+  await expect(dimensionCheck).toContainText("Profil ReptiFiles pour hatchling de moins de 12 g.");
+  await expect(report.getByRole("link", { name: /Enclosure Size & Cohabitation/ })).toBeVisible();
+  await expect(report.getByRole("link", { name: /Lighting, Heating & Humidity/ })).toBeVisible();
+});

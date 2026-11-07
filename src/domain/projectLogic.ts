@@ -3,7 +3,9 @@ import { analyzeDecorationLayout, formatDecorationLayoutWarnings, type LayoutWar
 
 export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
-export type LifeStage = "juvenile" | "adult";
+export type LifeStage = "hatchling" | "juvenile" | "adult";
+export const lifeStageLabels: Record<LifeStage, string> = { hatchling: "Nouveau-né", juvenile: "Juvénile", adult: "Adulte" };
+export const getLifeStageLabel = (lifeStage: LifeStage): string => lifeStageLabels[lifeStage];
 export type BiotopeCompatibilityStatus = "compatible" | "incompatible" | "unknown";
 export type BiotopeGuidance = { status: BiotopeCompatibilityStatus; detail: string };
 export const decorationVariants = {
@@ -54,6 +56,14 @@ export type SpeciesSource = { title: string; publisher: string; url: string; che
 export type Measurements = { hotSideTemperature: number | null; coolSideTemperature: number | null; baskingUvi: number | null; coolSideHumidity: number | null };
 export type MeasurementKey = keyof Measurements;
 export type ReferenceRanges = Partial<Record<MeasurementKey, readonly [number, number]>>;
+export type SpeciesStageProfile = {
+  minimumDimensions?: { width: number; depth: number; height: number } | null;
+  dimensionGuidance?: string;
+  referenceRanges?: ReferenceRanges | null;
+  hidesAtBothEnds?: boolean | null;
+  environmentGuidance?: string;
+  sources?: SpeciesSource[];
+};
 export type CheckStatus = "met" | "insufficient" | "attention" | "unknown";
 export type SpeciesProfile = {
   label: string;
@@ -61,12 +71,22 @@ export type SpeciesProfile = {
   commonName: string;
   source: SpeciesSource | null;
   stageGuidance?: Partial<Record<LifeStage, string>>;
+  stageProfiles?: Partial<Record<LifeStage, SpeciesStageProfile>>;
   environmentGuidance?: string;
   minimumDimensions: { width: number; depth: number; height: number } | null;
   dimensionGuidance?: string;
   referenceRanges: ReferenceRanges | null;
   hidesAtBothEnds: boolean | null;
   biotopeGuidance?: Partial<Record<Biotope, BiotopeGuidance>>;
+};
+export type ResolvedSpeciesStageProfile = {
+  minimumDimensions: { width: number; depth: number; height: number } | null;
+  dimensionGuidance?: string;
+  referenceRanges: ReferenceRanges | null;
+  hidesAtBothEnds: boolean | null;
+  stageGuidance?: string;
+  environmentGuidance?: string;
+  sources: SpeciesSource[];
 };
 export type HabitatZoneKey = "hot" | "cool" | "uv" | "retreat";
 export type HabitatZoneGuidance = { key: HabitatZoneKey; status: "documented" | "unknown" | "not-required"; range?: readonly [number, number] };
@@ -92,7 +112,7 @@ export type ProjectCheckSummary = {
   overallStatus: string;
 };
 export type ProjectCheckInput = {
-  species: Pick<SpeciesProfile, "minimumDimensions" | "dimensionGuidance" | "referenceRanges" | "hidesAtBothEnds">;
+  species: Pick<SpeciesProfile, "minimumDimensions" | "dimensionGuidance" | "referenceRanges" | "hidesAtBothEnds" | "stageGuidance" | "stageProfiles" | "environmentGuidance">;
   dimensions: { width: number; depth: number; height: number };
   shape?: Shape;
   biotope?: Biotope;
@@ -102,6 +122,20 @@ export type ProjectCheckInput = {
 };
 
 export const PROJECT_EXPORT_FORMAT = "terrarium-studio-project";
+
+export function getSpeciesStageProfile(species: Pick<SpeciesProfile, "minimumDimensions" | "dimensionGuidance" | "referenceRanges" | "hidesAtBothEnds" | "stageGuidance" | "stageProfiles" | "environmentGuidance">, lifeStage: LifeStage): ResolvedSpeciesStageProfile {
+  const stageProfile = species.stageProfiles?.[lifeStage];
+  const adultProfile = lifeStage === "adult" ? species : undefined;
+  return {
+    minimumDimensions: stageProfile?.minimumDimensions ?? adultProfile?.minimumDimensions ?? null,
+    dimensionGuidance: stageProfile?.dimensionGuidance ?? adultProfile?.dimensionGuidance,
+    referenceRanges: stageProfile?.referenceRanges ?? adultProfile?.referenceRanges ?? null,
+    hidesAtBothEnds: stageProfile?.hidesAtBothEnds ?? adultProfile?.hidesAtBothEnds ?? null,
+    stageGuidance: species.stageGuidance?.[lifeStage],
+    environmentGuidance: stageProfile?.environmentGuidance ?? adultProfile?.environmentGuidance,
+    sources: stageProfile?.sources ?? [],
+  };
+}
 
 export function getBiotopeGuidance(species: Pick<SpeciesProfile, "biotopeGuidance">, biotope: Biotope): BiotopeGuidance {
   return species.biotopeGuidance?.[biotope] ?? { status: "unknown", detail: "Compatibilité non documentée par une source vérifiée." };
@@ -255,7 +289,7 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
       (decoration.rotation === undefined || (typeof decoration.rotation === "number" && Number.isFinite(decoration.rotation) && decoration.rotation >= 0 && decoration.rotation < 360));
   });
   const measurements = project.measurements;
-  const isValidLifeStage = project.lifeStage === undefined || project.lifeStage === "juvenile" || project.lifeStage === "adult";
+  const isValidLifeStage = project.lifeStage === undefined || project.lifeStage === "hatchling" || project.lifeStage === "juvenile" || project.lifeStage === "adult";
   const isValidMeasurements = measurements === undefined || (
     typeof measurements === "object" && measurements !== null &&
     (["hotSideTemperature", "coolSideTemperature", "baskingUvi", "coolSideHumidity"] as const).every((key) => {
@@ -289,9 +323,8 @@ export function parseProjectExport(value: unknown, allowedSpecies: readonly stri
 }
 
 export function calculateProjectChecks({ species, dimensions, shape = "Basse", biotope = "Désertique", decorations, measurements, lifeStage = "adult" }: ProjectCheckInput): ProjectCheckSummary {
-  const minimumDimensions = lifeStage === "adult" ? species.minimumDimensions : null;
-  const referenceRanges = lifeStage === "adult" ? species.referenceRanges : null;
-  const hidesAtBothEnds = lifeStage === "adult" ? species.hidesAtBothEnds : null;
+  const stageProfile = getSpeciesStageProfile(species, lifeStage);
+  const { minimumDimensions, referenceRanges, hidesAtBothEnds } = stageProfile;
   const dimensionsMeetMinimum = minimumDimensions !== null &&
     dimensions.width >= minimumDimensions.width &&
     dimensions.depth >= minimumDimensions.depth &&
@@ -339,7 +372,7 @@ export function calculateProjectChecks({ species, dimensions, shape = "Basse", b
     {
       label: "Dimensions minimales",
       status: minimumDimensions === null ? "unknown" : dimensionsMeetMinimum ? "met" : "insufficient",
-      detail: minimumDimensions === null ? species.dimensionGuidance ?? "Non documenté" : `${dimensionsMeetMinimum ? "Respecté" : "Insuffisant"} · min. ${minimumDimensions.width} × ${minimumDimensions.depth} × ${minimumDimensions.height} cm`,
+      detail: minimumDimensions === null ? stageProfile.dimensionGuidance ?? "Non documenté" : `${dimensionsMeetMinimum ? "Respecté" : "Insuffisant"} · min. ${minimumDimensions.width} × ${minimumDimensions.depth} × ${minimumDimensions.height} cm${stageProfile.dimensionGuidance ? ` · ${stageProfile.dimensionGuidance}` : ""}`,
     },
     rangeCheck("Zone chaude", "hotSideTemperature", "°C"),
     rangeCheck("Zone fraîche", "coolSideTemperature", "°C"),

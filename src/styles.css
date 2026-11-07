@@ -141,7 +141,7 @@ h1, h2, p { margin-top: 0; }
 .species-select-wrap > svg { position: absolute; right: 9px; top: 10px; color: #8c988d; pointer-events: none; }
 .life-stage-control { display: grid; gap: 6px; margin-top: 13px; }
 .life-stage-control > span { color: #66746a; font-size: 9px; font-weight: 600; }
-.life-stage-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; padding: 3px; background: #e5e9df; border-radius: 5px; }
+.life-stage-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; background: #e5e9df; border-radius: 5px; }
 .life-stage-options button { min-width: 0; border: 0; border-radius: 3px; padding: 7px 8px; background: transparent; color: #78847b; font-size: 9px; cursor: pointer; }
 .life-stage-options button.active { background: #fffefa; color: #435a47; box-shadow: 0 1px 3px #354a3714; }
 .species-note { display: flex; align-items: flex-start; gap: 6px; font-size: 9px; color: #939c92; line-height: 1.5; margin: 9px 0 0; }.species-note svg { flex: 0 0 auto; margin-top: 1px; }
@@ -251,6 +251,7 @@ h1, h2, p { margin-top: 0; }
 .selected-species strong { font: 600 12px var(--display); color: #46564a; }
 .selected-species > span { color: #8b978d; font: italic 10px var(--sans); }
 .species-source { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.species-source > div { display: grid; gap: 4px; }
 .species-source .field-label { margin: 0; font-size: 8px; color: #9aa39a; }
 .species-source a { color: #526e56; font-size: 9px; line-height: 1.4; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .species-source small, .species-source > span { color: #89948a; font-size: 8px; line-height: 1.4; }

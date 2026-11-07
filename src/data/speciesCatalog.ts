@@ -12,7 +12,9 @@ export const speciesCatalog: SpeciesProfile[] = [
       Paludarium: { status: "incompatible", detail: "La RSPCA recommande un habitat sec, bien ventilé et à faible humidité (30–40 %)." },
     },
     stageGuidance: {
-      juvenile: "Les jeunes dragons ont besoin d’une plus grande part de proies; la part de végétaux augmente avec l’âge. La RSPCA indique deux repas par jour pour les bébés et un pour les juvéniles.",
+      hatchling: "La RSPCA indique deux repas par jour pour les bébés dragons barbus.",
+      juvenile: "La RSPCA indique un repas par jour pour les juvéniles; la part de végétaux augmente avec l’âge.",
+      adult: "La RSPCA indique un repas par jour; pour les dragons de plus de 30 cm, elle recommande environ 40 % de proies et 60 % de végétaux.",
     },
     minimumDimensions: { width: 120, depth: 60, height: 60 },
     referenceRanges: { hotSideTemperature: [38, 42], coolSideTemperature: [22, 26], baskingUvi: [3, 5], coolSideHumidity: [30, 40] },
@@ -37,9 +39,42 @@ export const speciesCatalog: SpeciesProfile[] = [
     scientificName: "Correlophus ciliatus",
     commonName: "Gecko à crête",
     source: { title: "Crested Gecko Care Guide", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko-care/", checkedAt: "2026-11-07" },
-    minimumDimensions: { width: 46, depth: 46, height: 61 },
+    minimumDimensions: { width: 45.72, depth: 45.72, height: 91.44 },
     referenceRanges: { hotSideTemperature: [23.9, 26.7], coolSideTemperature: [21.1, 23.9], baskingUvi: [1, 2], coolSideHumidity: [60, 80] },
     hidesAtBothEnds: null,
+    stageProfiles: {
+      hatchling: {
+        minimumDimensions: { width: 30.48, depth: 30.48, height: 30.48 },
+        dimensionGuidance: "Profil ReptiFiles pour hatchling de moins de 12 g.",
+        referenceRanges: null,
+        hidesAtBothEnds: null,
+        environmentGuidance: "Sous 13 g, ReptiFiles recommande un éclairage UVB compact à faible intensité et un tapis chauffant contrôlé par thermostat; la température ne doit pas dépasser 29 °C. Aucun UVI minimal de hatchling n’est publié dans ce guide.",
+        sources: [
+          { title: "Enclosure Size & Cohabitation", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko/care-guide/crested-gecko-terrarium-size-cohabitation", checkedAt: "2026-11-07" },
+          { title: "Lighting, Heating & Humidity", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko/care-guide/crested-gecko-temperatures-humidity", checkedAt: "2026-11-07" },
+        ],
+      },
+      juvenile: {
+        minimumDimensions: { width: 45.72, depth: 45.72, height: 91.44 },
+        dimensionGuidance: "Profil ReptiFiles pour juvénile de plus de 12 g.",
+        referenceRanges: { hotSideTemperature: [23.9, 26.7], coolSideTemperature: [21.1, 23.9], baskingUvi: [1, 2], coolSideHumidity: [60, 80] },
+        hidesAtBothEnds: null,
+        sources: [
+          { title: "Enclosure Size & Cohabitation", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko/care-guide/crested-gecko-terrarium-size-cohabitation", checkedAt: "2026-11-07" },
+          { title: "Lighting, Heating & Humidity", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko/care-guide/crested-gecko-temperatures-humidity", checkedAt: "2026-11-07" },
+        ],
+      },
+      adult: {
+        minimumDimensions: { width: 45.72, depth: 45.72, height: 91.44 },
+        dimensionGuidance: "Profil ReptiFiles pour adulte de plus de 12 g.",
+        referenceRanges: { hotSideTemperature: [23.9, 26.7], coolSideTemperature: [21.1, 23.9], baskingUvi: [1, 2], coolSideHumidity: [60, 80] },
+        hidesAtBothEnds: null,
+        sources: [
+          { title: "Enclosure Size & Cohabitation", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko/care-guide/crested-gecko-terrarium-size-cohabitation", checkedAt: "2026-11-07" },
+          { title: "Lighting, Heating & Humidity", publisher: "ReptiFiles", url: "https://reptifiles.com/crested-gecko/care-guide/crested-gecko-temperatures-humidity", checkedAt: "2026-11-07" },
+        ],
+      },
+    },
     biotopeGuidance: {
       Désertique: { status: "incompatible", detail: "ReptiFiles décrit une espèce arboricole de Nouvelle-Calédonie avec 60–80 % d’humidité." },
       Tropical: { status: "compatible", detail: "ReptiFiles décrit un gecko arboricole de Nouvelle-Calédonie avec une humidité de 60–80 %." },
@@ -60,7 +95,8 @@ export const speciesCatalog: SpeciesProfile[] = [
     commonName: "Serpent des blés",
     source: { title: "Corn snake care", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/cornsnake", checkedAt: "2026-11-07" },
     stageGuidance: {
-      juvenile: "La RSPCA indique un repas tous les 5–6 jours pour les nouveau-nés, puis tous les 7–14 jours à l’âge adulte.",
+      hatchling: "La RSPCA indique un souriceau tous les 5–6 jours pour les nouveau-nés.",
+      adult: "La RSPCA indique une souris adulte tous les 7–14 jours.",
     },
     minimumDimensions: null,
     dimensionGuidance: "La longueur du vivarium doit au moins égaler celle du serpent; profondeur et hauteur : au moins un tiers de sa longueur (exemple RSPCA : 150 × 50 × 50 cm pour un serpent de 150 cm).",
@@ -74,7 +110,8 @@ export const speciesCatalog: SpeciesProfile[] = [
     commonName: "Python royal",
     source: { title: "Keeping a royal python as a pet", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/royalpython", checkedAt: "2026-11-07" },
     stageGuidance: {
-      juvenile: "La RSPCA indique un repas tous les 5–6 jours pour les jeunes, puis tous les 7–14 jours à l’âge adulte, selon le poids.",
+      juvenile: "La RSPCA indique un repas tous les 5–6 jours pour les jeunes serpents.",
+      adult: "La RSPCA indique un repas tous les 7–14 jours à l’âge adulte, selon le poids.",
     },
     minimumDimensions: null,
     dimensionGuidance: "La longueur du vivarium doit au moins égaler celle du serpent; profondeur et hauteur : au moins un tiers de sa longueur (exemple RSPCA : 120 × 40 × 40 cm pour un serpent de 120 cm).",

@@ -1,3 +1,4 @@
+import { getLifeStageLabel } from "./projectLogic";
 import type { Biotope, Decoration, LifeStage, Measurements, Shape } from "./projectLogic";
 
 export const MAX_PROJECT_HISTORY = 50;
@@ -47,7 +48,7 @@ export function describeProjectHistoryDifference(from: EditableProjectState, to:
   if (from.dimensions.depth !== to.dimensions.depth) changes.push(`Profondeur : ${from.dimensions.depth} → ${to.dimensions.depth} cm`);
   if (from.dimensions.height !== to.dimensions.height) changes.push(`Hauteur : ${from.dimensions.height} → ${to.dimensions.height} cm`);
   if (from.species !== to.species) changes.push(`Espèce : ${from.species} → ${to.species}`);
-  if (from.lifeStage !== to.lifeStage) changes.push(`Stade de vie : ${from.lifeStage === "adult" ? "adulte" : "juvénile"} → ${to.lifeStage === "adult" ? "adulte" : "juvénile"}`);
+  if (from.lifeStage !== to.lifeStage) changes.push(`Stade de vie : ${getLifeStageLabel(from.lifeStage).toLowerCase()} → ${getLifeStageLabel(to.lifeStage).toLowerCase()}`);
 
   (Object.keys(measurementLabels) as (keyof Measurements)[]).forEach((key) => {
     const oldValue = from.measurements[key];

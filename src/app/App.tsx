@@ -32,6 +32,8 @@ import {
   getBiotopeGuidance,
   getDefaultDecorationVariant,
   getHabitatZoneGuidance,
+  getLifeStageLabel,
+  getSpeciesStageProfile,
   getEquipmentZoneSources,
   measureDecorationPlacement,
   positionDecorationAtCm,
@@ -198,13 +200,18 @@ function App() {
   };
   const setShape = (value: Shape) => updateProjectHistory((current) => ({ ...current, shape: value }), undefined, `Format : ${value}`);
   const setBiotope = (value: Biotope) => updateProjectHistory((current) => ({ ...current, biotope: value }), undefined, `Biotope : ${value}`);
-  const setLifeStage = (value: LifeStage) => updateProjectHistory((current) => ({ ...current, lifeStage: value }), undefined, `Stade de vie : ${value === "adult" ? "adulte" : "juvénile"}`);
+  const setLifeStage = (value: LifeStage) => updateProjectHistory((current) => ({ ...current, lifeStage: value }), undefined, `Stade de vie : ${getLifeStageLabel(value).toLowerCase()}`);
   const setDecorations: Dispatch<SetStateAction<Decoration[]>> = (update) => updateProjectHistory((current) => ({
     ...current,
     decorations: typeof update === "function" ? update(current.decorations) : update,
   }), undefined, "Modifier le décor");
   const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
-  const habitatZoneGuidance = getHabitatZoneGuidance(selectedSpecies);
+  const selectedStageProfile = getSpeciesStageProfile(selectedSpecies, lifeStage);
+  const selectedSpeciesSources = [
+    ...(selectedSpecies.source ? [selectedSpecies.source] : []),
+    ...selectedStageProfile.sources,
+  ].filter((source, index, sources) => sources.findIndex((candidate) => candidate.url === source.url) === index);
+  const habitatZoneGuidance = getHabitatZoneGuidance(selectedStageProfile);
   const [showHabitatZones, setShowHabitatZones] = useState(false);
   const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
   const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
@@ -798,12 +805,11 @@ function App() {
             <div className="life-stage-control" role="group" aria-label="Stade de vie">
               <span>Stade de vie</span>
               <div className="life-stage-options">
-                <button type="button" className={lifeStage === "juvenile" ? "active" : ""} aria-pressed={lifeStage === "juvenile"} onClick={() => setLifeStage("juvenile")}>Juvénile</button>
-                <button type="button" className={lifeStage === "adult" ? "active" : ""} aria-pressed={lifeStage === "adult"} onClick={() => setLifeStage("adult")}>Adulte</button>
+                {(["hatchling", "juvenile", "adult"] as LifeStage[]).map((stage) => <button key={stage} type="button" className={lifeStage === stage ? "active" : ""} aria-pressed={lifeStage === stage} onClick={() => setLifeStage(stage)}>{getLifeStageLabel(stage)}</button>)}
               </div>
             </div>
-            <p className="species-note"><CircleHelp size={13} /> {lifeStage === "juvenile" ? "Profil d’habitat juvénile incomplet; les seuils adultes ne sont pas appliqués." : selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
-            {selectedSpecies.stageGuidance?.[lifeStage] && <div className="stage-guidance"><p className="field-label">Repère alimentaire · {selectedSpecies.source?.publisher}</p><p>{selectedSpecies.stageGuidance[lifeStage]}</p></div>}
+            <p className="species-note"><CircleHelp size={13} /> {lifeStage !== "adult" && !selectedStageProfile.minimumDimensions && !selectedStageProfile.referenceRanges ? `Repères d’habitat ${getLifeStageLabel(lifeStage).toLowerCase()} non documentés; les seuils adultes ne sont pas appliqués.` : selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
+            {selectedStageProfile.stageGuidance && <div className="stage-guidance"><p className="field-label">Repère alimentaire · {selectedSpecies.source?.publisher}</p><p>{selectedStageProfile.stageGuidance}</p></div>}
             {selectedSpecies.referenceRanges && <div className="measurement-form">
               <p className="field-label">Mesures relevées <small>optionnel</small></p>
               <div className="measurement-grid">
@@ -812,8 +818,8 @@ function App() {
                 <label><span>UVI · basking</span><input aria-label="Indice UVB UVI dans la zone de basking" type="number" min="0" step="0.1" value={measurements.baskingUvi ?? ""} onChange={(event) => updateMeasurement("baskingUvi", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
                 <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
               </div>
-              <p className="measurement-note">{lifeStage === "adult" ? `Repères ${selectedSpecies.source?.publisher} pour adulte; températures en °C converties si nécessaire.` : "Relevés conservés, mais aucune plage juvénile vérifiée ne permet de les comparer."} Mesurez chaque zone séparément.</p>
-              {selectedSpecies.environmentGuidance && <p className="measurement-note">{selectedSpecies.environmentGuidance}</p>}
+              <p className="measurement-note">{selectedStageProfile.referenceRanges ? `Repères ${selectedSpecies.source?.publisher} pour ${getLifeStageLabel(lifeStage).toLowerCase()}; températures en °C converties si nécessaire.` : `Aucune plage de mesure chiffrée vérifiée pour ${getLifeStageLabel(lifeStage).toLowerCase()}; les relevés ne sont pas comparés.`} Mesurez chaque zone séparément.</p>
+              {selectedStageProfile.environmentGuidance && <p className="measurement-note">{selectedStageProfile.environmentGuidance}</p>}
             </div>}
           </section>
         </aside>
@@ -900,7 +906,7 @@ function App() {
             <p>{hasInsufficientCheck ? "Au moins un repère de la source n’est pas atteint. Consultez le détail ci-dessous." : hasAttentionCheck ? "Au moins une mesure ou un dégagement de placement demande une vérification; consultez les détails ci-dessous." : "Ce bilan est partiel : les critères sans données sourcées restent inconnus et ne sont pas considérés comme conformes."}</p>
           </div>
           <div className="selected-species"><p className="field-label">ESPÈCE SÉLECTIONNÉE</p><strong>{selectedSpecies.commonName}</strong><span>{selectedSpecies.scientificName}</span></div>
-          <div className="species-source"><p className="field-label">RÉFÉRENCE</p>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><small>Consultée le {selectedSpecies.source.checkedAt}</small></> : <span>Aucune référence vérifiée. Ces points restent inconnus.</span>}</div>
+          <div className="species-source"><p className="field-label">RÉFÉRENCES · {getLifeStageLabel(lifeStage).toUpperCase()}</p>{selectedSpeciesSources.length > 0 ? selectedSpeciesSources.map((source) => <div key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} · {source.publisher}</a><small>Consultée le {source.checkedAt}</small></div>) : <span>Aucune référence vérifiée. Ces points restent inconnus.</span>}</div>
           <div className="checklist-heading"><span>Points à vérifier</span><span className="checklist-line" /></div>
           {checks.map((check) => {
             const warnings = check.issues ?? [];
@@ -949,7 +955,7 @@ function App() {
             <dl className="report-facts">
               <div><dt>Dimensions intérieures</dt><dd>{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</dd></div>
               <div><dt>Biotope et format</dt><dd>{biotope} · {shape.toLowerCase()}</dd></div>
-              <div><dt>Stade de vie</dt><dd>{lifeStage === "adult" ? "Adulte" : "Juvénile"}</dd></div>
+              <div><dt>Stade de vie</dt><dd>{getLifeStageLabel(lifeStage)}</dd></div>
               <div><dt>Volume estimé</dt><dd>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</dd></div>
               <div><dt>Statut du bilan</dt><dd>{overallStatus}</dd></div>
             </dl>
@@ -973,9 +979,9 @@ function App() {
                 <strong>{check.label}</strong><span className={`report-check-status ${check.status}`}>{checkStatusLabels[check.status]}</span><p>{check.detail}</p>
               </div>)}
             </div>
-            {selectedSpecies.stageGuidance?.[lifeStage] && <section className="report-stage-guidance"><h3>Repère alimentaire · {selectedSpecies.source?.publisher}</h3><p>{selectedSpecies.stageGuidance[lifeStage]}</p></section>}
-            {selectedSpecies.environmentGuidance && <section className="report-stage-guidance"><h3>Repère environnemental · {selectedSpecies.source?.publisher}</h3><p>{selectedSpecies.environmentGuidance}</p></section>}
-            <section className="report-reference"><h3>Référence consultée</h3>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><p>Consultée le {selectedSpecies.source.checkedAt}. Les repères ne remplacent pas le guide complet.</p></> : <p>Aucune référence de maintenance vérifiée pour cette espèce.</p>}</section>
+            {selectedStageProfile.stageGuidance && <section className="report-stage-guidance"><h3>Repère alimentaire · {selectedSpecies.source?.publisher}</h3><p>{selectedStageProfile.stageGuidance}</p></section>}
+            {selectedStageProfile.environmentGuidance && <section className="report-stage-guidance"><h3>Repère environnemental · {selectedSpecies.source?.publisher}</h3><p>{selectedStageProfile.environmentGuidance}</p></section>}
+            <section className="report-reference"><h3>Références consultées</h3>{selectedSpeciesSources.length > 0 ? selectedSpeciesSources.map((source) => <p key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} · {source.publisher}</a><br />Consultée le {source.checkedAt}. Les repères ne remplacent pas le guide complet.</p>) : <p>Aucune référence de maintenance vérifiée pour cette espèce.</p>}</section>
             <p className="report-disclaimer">Ce bilan est partiel; les critères non documentés ne sont pas considérés comme conformes. Il ne certifie pas un habitat et ne remplace pas l’avis d’un vétérinaire spécialisé.</p>
             <div className="report-actions"><button type="button" className="cancel-button" onClick={() => setShowReport(false)}>Fermer</button><button type="button" className="save-button" onClick={() => window.print()}><Printer size={15} /> Imprimer / PDF</button></div>
           </section>

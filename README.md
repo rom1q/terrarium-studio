@@ -8,6 +8,8 @@ Configurateur web pour concevoir un terrarium, visualiser son aménagement en 3D
 - Projets enregistrés localement, import/export JSON, historique annulable et points de restauration nommés.
 - Vue en plan cotée, rapport imprimable et vérifications d'implantation.
 - Catalogue de six espèces. Cinq fiches ont une référence consultée; le dendrobate n'a pas encore de source de maintenance vérifiée.
+- Sélection nouveau-né/juvénile/adulte; le profil du gecko à crête applique les tailles d'enclos ReptiFiles selon le poids, et les critères sans données propres au stade restent inconnus.
+- Repères alimentaires par stade documentés pour certaines espèces selon leurs sources RSPCA.
 - Les critères non documentés restent inconnus. Le bilan ne certifie pas un habitat et ne remplace pas l'avis d'un vétérinaire spécialisé.
 
 ## Lancer le projet
@@ -42,7 +44,7 @@ npm run build
 
 ## À poursuivre
 
-- Ajouter des fiches d'espèces et des étapes de vie à partir de références spécifiques et vérifiables.
+- Compléter les profils de stade pour les autres espèces à partir de références spécifiques et vérifiables.
 - Étendre les tests navigateur aux workflows d'édition, d'import/export et de rapport.
 
 Les alertes doivent rester explicables, citer leurs références et distinguer un manque de données d'une non-conformité confirmée.
