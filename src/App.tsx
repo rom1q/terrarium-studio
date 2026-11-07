@@ -624,6 +624,9 @@ function App() {
     let draggedObject: THREE.Object3D | null = null;
     let draggedId: number | null = null;
     const dragOffset = new THREE.Vector2();
+    const dragStartPointer = new THREE.Vector2();
+    const dragPlane = new THREE.Plane();
+    let dragStartRotation = 0;
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(floorY + 0.1));
@@ -649,6 +652,23 @@ function App() {
       selectDecoration(id);
       if (viewMode === "3d") {
         transformControls.attach(object);
+        draggedObject = object;
+        draggedId = id;
+        dragStartPointer.set(event.clientX, event.clientY);
+        dragStartRotation = object.rotation.y;
+        if (transformMode === "translate") {
+          dragPlane.set(new THREE.Vector3(0, 1, 0), -object.position.y);
+          const point = raycaster.ray.intersectPlane(dragPlane, new THREE.Vector3());
+          if (!point) {
+            draggedObject = null;
+            draggedId = null;
+            return;
+          }
+          dragOffset.set(object.position.x - point.x, object.position.z - point.z);
+        }
+        controls.enabled = false;
+        renderer.domElement.setPointerCapture(event.pointerId);
+        event.preventDefault();
         return;
       }
       const point = raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3());
@@ -662,8 +682,12 @@ function App() {
     };
     const onPointerMove = (event: PointerEvent) => {
       if (!draggedObject) return;
+      if (viewMode === "3d" && transformMode === "rotate") {
+        draggedObject.rotation.y = dragStartRotation + (event.clientX - dragStartPointer.x) * 0.01;
+        return;
+      }
       updatePointerRay(event);
-      const point = raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3());
+      const point = raycaster.ray.intersectPlane(viewMode === "3d" ? dragPlane : floorPlane, new THREE.Vector3());
       if (!point) return;
       draggedObject.position.x = THREE.MathUtils.clamp(point.x + dragOffset.x, -widthHalf + 0.18, widthHalf - 0.18);
       draggedObject.position.z = THREE.MathUtils.clamp(point.z + dragOffset.y, -depthHalf + 0.18, depthHalf - 0.18);
@@ -673,11 +697,16 @@ function App() {
       const id = draggedId;
       const previousPosition = decorations.find((item) => item.id === id)?.position;
       const position = { ...previousPosition, x: draggedObject.position.x / widthHalf, z: draggedObject.position.z / depthHalf };
+      const degrees = THREE.MathUtils.radToDeg(draggedObject.rotation.y);
       draggedObject = null;
       draggedId = null;
       controls.enabled = true;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
-      setDecorations((current) => current.map((item) => item.id === id ? { ...item, position } : item));
+      setDecorations((current) => rotateDecoration(
+        current.map((item) => item.id === id ? { ...item, position } : item),
+        id,
+        degrees,
+      ));
     };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
