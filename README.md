@@ -14,15 +14,11 @@ Configurateur web pour concevoir un terrarium, visualiser son aménagement en 3D
 
 Prérequis : Node.js 20.19+ ou 22.12+ et npm.
 
+Sous Windows, double-cliquez sur `start-terrarium.cmd` pour installer les dépendances manquantes, lancer le serveur de développement et ouvrir l’application dans le navigateur par défaut.
+
 ```powershell
 npm install
 npm run dev
-```
-
-Pour vérifier le build de production :
-
-```powershell
-npm run build
 ```
 
 Pour lancer les tests unitaires :
@@ -38,7 +34,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Pour produire le bundle de production :
+Pour vérifier le build de production :
 
 ```powershell
 npm run build
