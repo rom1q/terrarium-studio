@@ -161,6 +161,11 @@ h1, h2, p { margin-top: 0; }
 .view-tabs { display: inline-flex; gap: 4px; background: #e5e9df; padding: 3px; border-radius: 5px; }
 .view-tabs button { border: 0; border-radius: 3px; background: transparent; color: #78847b; padding: 6px 10px; display: inline-flex; gap: 6px; align-items: center; font-size: 10px; cursor: pointer; }
 .view-tabs button.active { background: #fffefa; color: #435a47; box-shadow: 0 1px 3px #354a3714; }
+.history-controls { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid #e0e6dc; border-radius: 5px; background: #fffefa; }
+.history-controls button { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 3px; background: transparent; color: #506b56; cursor: pointer; }
+.history-controls button:hover:not(:disabled) { background: #edf3e8; }
+.history-controls button:disabled { color: #b6bdb4; cursor: default; }
+.history-controls button:focus-visible { outline: 2px solid #6a876e; outline-offset: 1px; }
 .zones-toggle { height: 32px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid #e0e6dc; border-radius: 4px; background: #fffefa; color: #78847b; font-size: 9px; cursor: pointer; }
 .zones-toggle.active { border-color: #b6c8b3; background: #edf3e8; color: #49664f; }
 .stage-dimensions { font: 500 10px var(--display); color: #89948a; padding-top: 8px; }

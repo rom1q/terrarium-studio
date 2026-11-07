@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import {
   AlertTriangle,
   Check,
@@ -12,12 +13,14 @@ import {
   Plus,
   Pencil,
   Printer,
+  Redo2,
   RotateCcw,
   Ruler,
   ShieldCheck,
   Sprout,
   Sun,
   Trash2,
+  Undo2,
   Upload,
   Waves,
   X,
@@ -55,6 +58,7 @@ import { DecorationIcon, DecorationPanel, decorationKindClass } from "../feature
 import { TerrariumScene } from "../features/terrarium/TerrariumScene";
 import { applyDecorationLayoutSuggestion } from "../domain/layoutValidation";
 import type { LayoutSuggestion, LayoutWarning } from "../domain/layoutValidation";
+import { createDecorationHistory, decorationHistoryReducer } from "../domain/decorationHistory";
 import {
   clearCurrentProject,
   downloadProjectExport,
@@ -120,7 +124,16 @@ function App() {
   const [activeLayoutWarningId, setActiveLayoutWarningId] = useState<string | null>(null);
   const [previewedLayoutSuggestion, setPreviewedLayoutSuggestion] = useState<LayoutSuggestion | null>(null);
   const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
-  const [decorations, setDecorations] = useState<Decoration[]>(initialProject?.decorations ?? createDefaultDecorations());
+  const [decorationHistory, dispatchDecorationHistory] = useReducer(
+    decorationHistoryReducer,
+    initialProject?.decorations ?? createDefaultDecorations(),
+    createDecorationHistory,
+  );
+  const decorations = decorationHistory.present;
+  const setDecorations: Dispatch<SetStateAction<Decoration[]>> = (update) => dispatchDecorationHistory({ type: "set", update });
+  const replaceDecorations = (nextDecorations: Decoration[]) => dispatchDecorationHistory({ type: "replace", decorations: nextDecorations });
+  const canUndoDecorations = decorationHistory.past.length > 0;
+  const canRedoDecorations = decorationHistory.future.length > 0;
   const [nextId, setNextId] = useState(initialProject?.nextId ?? 4);
   const selectDecoration = (id: number | null) => {
     selectedDecorationIdRef.current = id;
@@ -131,6 +144,25 @@ function App() {
     setPreviewedLayoutSuggestion(null);
     selectDecoration(id);
   };
+
+  useEffect(() => {
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select"))) return;
+      if (showSaveDialog || showReport || !(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      if (key === "z" && event.shiftKey || key === "y") {
+        event.preventDefault();
+        dispatchDecorationHistory({ type: "redo" });
+      } else if (key === "z") {
+        event.preventDefault();
+        dispatchDecorationHistory({ type: "undo" });
+      }
+    };
+
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => window.removeEventListener("keydown", handleHistoryShortcut);
+  }, [showSaveDialog, showReport]);
 
   useEffect(() => {
     if (!projectId) {
@@ -402,7 +434,7 @@ function App() {
     setDimensions(project.dimensions);
     setSpecies(project.species);
     setLifeStage(project.lifeStage ?? "adult");
-    setDecorations(project.decorations);
+    replaceDecorations(project.decorations);
     setNextId(project.nextId);
     setMeasurements(project.measurements ?? createDefaultMeasurements());
     selectDecoration(null);
@@ -425,7 +457,7 @@ function App() {
     setDimensions(project.dimensions);
     setSpecies(project.species);
     setLifeStage(project.lifeStage ?? "adult");
-    setDecorations(project.decorations);
+    replaceDecorations(project.decorations);
     setNextId(project.nextId);
     setMeasurements(project.measurements ?? createDefaultMeasurements());
     selectDecoration(null);
@@ -448,7 +480,7 @@ function App() {
     setDimensions({ width: 120, depth: 60, height: 80 });
     setSpecies(speciesList[0].label);
     setLifeStage("adult");
-    setDecorations(createDefaultDecorations());
+    replaceDecorations(createDefaultDecorations());
     setNextId(4);
     setMeasurements(createDefaultMeasurements());
     selectDecoration(null);
@@ -629,6 +661,10 @@ function App() {
           <div className="stage-toolbar">
             <div className="stage-view-controls">
               <div className="view-tabs"><button className={viewMode === "3d" ? "active" : ""} type="button" aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}><Eye size={14} /> Vue 3D</button><button className={viewMode === "plan" ? "active" : ""} type="button" aria-pressed={viewMode === "plan"} onClick={() => setViewMode("plan")}><Ruler size={14} /> Plan</button></div>
+              <div className="history-controls" role="group" aria-label="Historique du décor">
+                <button type="button" aria-label="Annuler le changement de décor" aria-keyshortcuts="Control+Z Meta+Z" title="Annuler · Ctrl/Cmd+Z" disabled={!canUndoDecorations} onClick={() => dispatchDecorationHistory({ type: "undo" })}><Undo2 size={15} /></button>
+                <button type="button" aria-label="Rétablir le changement de décor" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Rétablir · Ctrl/Cmd+Shift+Z" disabled={!canRedoDecorations} onClick={() => dispatchDecorationHistory({ type: "redo" })}><Redo2 size={15} /></button>
+              </div>
               <button className={`zones-toggle ${showHabitatZones ? "active" : ""}`} type="button" aria-pressed={showHabitatZones} onClick={() => setShowHabitatZones((visible) => !visible)}><Layers size={14} /> Zones</button>
             </div>
             <span className="stage-dimensions">{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</span>
