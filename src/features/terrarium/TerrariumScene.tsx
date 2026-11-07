@@ -1,0 +1,566 @@
+import { useEffect, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { getDefaultDecorationVariant, getEquipmentZoneSources, rotateDecoration, type Biotope, type Decoration, type HabitatZoneGuidance, type HabitatZoneKey, type Shape, type SpeciesProfile } from "../../domain/projectLogic";
+import { plantCatalog } from "../../data/plantCatalog";
+
+type TerrariumSceneProps = {
+  shape: Shape;
+  dimensions: { width: number; depth: number; height: number };
+  biotope: Biotope;
+  decorations: Decoration[];
+  viewMode: "3d" | "plan";
+  selectedDecorationId: number | null;
+  transformMode: "translate" | "rotate";
+  selectedSpecies: SpeciesProfile;
+  habitatZoneGuidance: HabitatZoneGuidance[];
+  showHabitatZones: boolean;
+  onDecorationSelectionChange: (id: number | null) => void;
+  onDecorationsChange: Dispatch<SetStateAction<Decoration[]>>;
+};
+
+const biotopeColors: Record<Biotope, { ground: number; plant: number; water: number }> = {
+  Désertique: { ground: 0xcda875, plant: 0x74884b, water: 0x8dbdc1 },
+  Tropical: { ground: 0x604c38, plant: 0x568b50, water: 0x83bfc0 },
+  Paludarium: { ground: 0x665342, plant: 0x4c8051, water: 0x69abb0 },
+};
+
+function getPlantProfile(id: string | undefined) {
+  return id ? plantCatalog.find((plant) => plant.id === id) : undefined;
+}
+
+export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const selectionHandlerRef = useRef(onDecorationSelectionChange);
+  const selectedDecorationIdRef = useRef(selectedDecorationId);
+  selectionHandlerRef.current = onDecorationSelectionChange;
+  selectedDecorationIdRef.current = selectedDecorationId;
+
+  useEffect(() => {
+    const host = viewportRef.current;
+    if (!host) return;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#e9ede4");
+    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+    if (viewMode === "plan") {
+      camera.up.set(0, 0, -1);
+      camera.position.set(0, 8.5, 0);
+    } else {
+      camera.position.set(4.8, 3.8, 5.7);
+    }
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+    host.replaceChildren(renderer.domElement);
+
+    scene.add(new THREE.HemisphereLight(0xfff8e9, 0x65745c, 2.1));
+    const keyLight = new THREE.DirectionalLight(0xffedc8, 3.2);
+    keyLight.position.set(-3, 7, 5);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xc5e0d1, 1.3);
+    fillLight.position.set(5, 3, -4);
+    scene.add(fillLight);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.target.set(0, viewMode === "plan" ? 0.22 : 0.9, 0);
+    controls.minDistance = 3.2;
+    controls.maxDistance = 11;
+    controls.maxPolarAngle = Math.PI * 0.48;
+    controls.enableRotate = viewMode !== "plan";
+    const transformControls = new TransformControls(camera, renderer.domElement);
+    transformControls.setMode(transformMode);
+    transformControls.rotationSnap = Math.PI / 12;
+    transformControls.showX = transformMode !== "rotate";
+    transformControls.showZ = transformMode !== "rotate";
+
+    const width = Math.min(3.2, Math.max(1.7, dimensions.width / 58));
+    const depth = Math.min(2.5, Math.max(1.25, dimensions.depth / 38));
+    const heightScale = shape === "Verticale" ? 0.038 : shape === "Cubique" ? 0.03 : 0.022;
+    const height = Math.min(3.1, Math.max(1.65, dimensions.height * heightScale));
+    const floorY = 0.12;
+    const colors = biotopeColors[biotope];
+    const zoneIsDocumented = (key: HabitatZoneKey) => habitatZoneGuidance.find((zone) => zone.key === key)?.status === "documented";
+    const equipmentZoneSources = getEquipmentZoneSources(decorations);
+    const glass = new THREE.MeshPhysicalMaterial({
+      color: 0xd9e6d9,
+      transparent: true,
+      opacity: 0.14,
+      roughness: 0.12,
+      metalness: 0.04,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x414f43, roughness: 0.36 });
+    const groundMaterial = new THREE.MeshStandardMaterial({ color: colors.ground, roughness: 0.94 });
+    const widthHalf = width / 2;
+    const depthHalf = depth / 2;
+
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(width, 0.2, depth), groundMaterial);
+    floor.position.y = floorY;
+    scene.add(floor);
+
+    if (biotope === "Paludarium") {
+      const water = new THREE.Mesh(
+        new THREE.BoxGeometry(width * 0.4, 0.045, depth * 0.94),
+        new THREE.MeshPhysicalMaterial({ color: colors.water, roughness: 0.16, metalness: 0.12 }),
+      );
+      water.position.set(width * 0.28, floorY + 0.13, 0);
+      scene.add(water);
+    }
+
+    const pane = (paneWidth: number, paneHeight: number, x: number, y: number, z: number) => {
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(paneWidth, paneHeight), glass);
+      mesh.position.set(x, y, z);
+      scene.add(mesh);
+    };
+    pane(width, height, 0, floorY + height / 2 + 0.1, -depthHalf);
+    pane(depth, height, -widthHalf, floorY + height / 2 + 0.1, 0);
+    pane(depth, height, widthHalf, floorY + height / 2 + 0.1, 0);
+    pane(width, height, 0, floorY + height / 2 + 0.1, depthHalf);
+    pane(width, height, 0, floorY + height + 0.1, 0);
+
+    const addBeam = (beamWidth: number, beamHeight: number, beamDepth: number, x: number, y: number, z: number) => {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(beamWidth, beamHeight, beamDepth), frameMaterial);
+      beam.position.set(x, y, z);
+      scene.add(beam);
+    };
+    const rail = 0.045;
+    for (const x of [-widthHalf, widthHalf]) {
+      for (const z of [-depthHalf, depthHalf]) {
+        addBeam(rail, height + rail, rail, x, floorY + height / 2 + 0.1, z);
+      }
+    }
+    for (const y of [floorY + 0.1, floorY + height + 0.1]) {
+      addBeam(width + rail, rail, rail, 0, y, -depthHalf);
+      addBeam(width + rail, rail, rail, 0, y, depthHalf);
+      addBeam(rail, rail, depth + rail, -widthHalf, y, 0);
+      addBeam(rail, rail, depth + rail, widthHalf, y, 0);
+    }
+
+    const decorationObjects: THREE.Object3D[] = [];
+    const decorationObjectsById = new Map<number, THREE.Object3D>();
+    decorations.forEach((item) => {
+      const x = item.position.x * widthHalf;
+      const z = item.position.z * depthHalf;
+      const verticalOffset = (item.position.y ?? 0) * height;
+      const sizeScale = (item.size ?? 100) / 100;
+      const plantProfile = item.kind === "Plante" ? getPlantProfile(item.plantSpeciesId) : undefined;
+      const variant = item.variant ?? plantProfile?.visualVariant ?? getDefaultDecorationVariant(item.kind, biotope);
+      if (item.kind === "Plante") {
+        const plant = new THREE.Group();
+        plant.userData.decorationId = item.id;
+        const stem = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.018, 0.026, 0.62, 7),
+          new THREE.MeshStandardMaterial({ color: 0x65804b, roughness: 0.8 }),
+        );
+        if (variant === "Rosette") stem.visible = false;
+        stem.position.y = 0.38;
+        plant.add(stem);
+        const leafCount = variant === "Feuillage dense" ? 5 : 8;
+        for (let leaf = 0; leaf < leafCount; leaf += 1) {
+          const angle = leaf * (Math.PI * 2 / leafCount);
+          const leafRadius = variant === "Fougère" ? 0.1 : variant === "Rosette" ? 0.16 : 0.13;
+          const leafWidth = variant === "Fougère" ? 0.07 : 0.13;
+          const leafHeight = variant === "Rosette" ? 0.3 : variant === "Fougère" ? 0.36 : 0.42;
+          const leafY = variant === "Rosette" ? 0.22 : 0.48 + leaf * (variant === "Fougère" ? 0.065 : 0.1);
+          const foliage = new THREE.Mesh(
+            new THREE.ConeGeometry(leafWidth, leafHeight, 5),
+            new THREE.MeshStandardMaterial({ color: leaf % 2 ? 0x55804b : colors.plant, roughness: 0.78 }),
+          );
+          foliage.position.set(Math.cos(angle) * leafRadius, leafY, Math.sin(angle) * leafRadius);
+          foliage.rotation.z = Math.cos(angle) * (variant === "Rosette" ? 0.8 : 0.5);
+          foliage.rotation.x = Math.sin(angle) * (variant === "Rosette" ? 0.8 : 0.4);
+          plant.add(foliage);
+        }
+        plant.scale.setScalar(sizeScale);
+        plant.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        plant.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(plant);
+        decorationObjects.push(plant);
+        decorationObjectsById.set(item.id, plant);
+      } else if (item.kind === "Cachette") {
+        const hide = new THREE.Group();
+        hide.userData.decorationId = item.id;
+        const isHollowTrunk = variant === "Tronc creux";
+        const body = new THREE.Mesh(
+          isHollowTrunk ? new THREE.CylinderGeometry(0.32, 0.34, 0.95, 12) : new THREE.DodecahedronGeometry(0.42, 0),
+          new THREE.MeshStandardMaterial({ color: variant === "Écorce creuse" ? 0x785a3c : isHollowTrunk ? 0x76513a : 0x88735b, roughness: 1 }),
+        );
+        if (variant === "Écorce creuse") body.scale.set(1.45, 0.38, 1.05);
+        else if (isHollowTrunk) body.scale.set(1, 0.8, 0.9);
+        else body.scale.set(1.25, 0.68, 0.95);
+        if (isHollowTrunk) body.rotation.z = Math.PI / 2;
+        body.position.y = 0.26;
+        hide.add(body);
+        const entrance = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16),
+          new THREE.MeshStandardMaterial({ color: 0x352e27, roughness: 1 }),
+        );
+        if (isHollowTrunk) {
+          entrance.rotation.z = Math.PI / 2;
+          entrance.position.set(0.35, 0.19, 0);
+        } else {
+          entrance.rotation.x = Math.PI / 2;
+          entrance.position.set(0, 0.19, 0.36);
+        }
+        hide.add(entrance);
+        hide.scale.setScalar(sizeScale);
+        hide.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        hide.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(hide);
+        decorationObjects.push(hide);
+        decorationObjectsById.set(item.id, hide);
+      } else if (item.kind === "Branche") {
+        const branch = new THREE.Group();
+        branch.userData.decorationId = item.id;
+        const wood = new THREE.MeshStandardMaterial({ color: variant === "Branche droite" ? 0x805f42 : 0x705238, roughness: 0.94 });
+        const addSegment = (start: THREE.Vector3, end: THREE.Vector3, radius: number) => {
+          const direction = new THREE.Vector3().subVectors(end, start);
+          const segment = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.72, radius, direction.length(), 8), wood);
+          segment.position.copy(start).add(end).multiplyScalar(0.5);
+          segment.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+          branch.add(segment);
+        };
+        addSegment(new THREE.Vector3(-0.48, 0.16, 0), new THREE.Vector3(0.48, 0.78, 0), 0.075);
+        if (variant === "Branche fourchue") {
+          addSegment(new THREE.Vector3(0.06, 0.48, 0), new THREE.Vector3(-0.2, 0.9, 0.18), 0.045);
+          addSegment(new THREE.Vector3(0.23, 0.59, 0), new THREE.Vector3(0.38, 0.98, -0.16), 0.04);
+        }
+        branch.scale.setScalar(sizeScale);
+        branch.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        branch.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(branch);
+        decorationObjects.push(branch);
+        decorationObjectsById.set(item.id, branch);
+      } else if (item.kind === "Plateforme") {
+        const platform = new THREE.Group();
+        platform.userData.decorationId = item.id;
+        const material = new THREE.MeshStandardMaterial({ color: variant === "Plateau en liège" ? 0x9a7855 : 0x806344, roughness: 0.92 });
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.1, 0.62), material);
+        slab.position.y = 0.48;
+        platform.add(slab);
+        for (const supportX of [-0.36, 0.36]) {
+          for (const supportZ of [-0.22, 0.22]) {
+            const support = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), material);
+            support.position.set(supportX, 0.22, supportZ);
+            platform.add(support);
+          }
+        }
+        platform.scale.setScalar(sizeScale);
+        platform.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        platform.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(platform);
+        decorationObjects.push(platform);
+        decorationObjectsById.set(item.id, platform);
+      } else if (item.kind === "Gamelle") {
+        const bowl = new THREE.Group();
+        bowl.userData.decorationId = item.id;
+        const ceramic = new THREE.MeshStandardMaterial({ color: 0x8b8b79, roughness: 0.48 });
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.21, 0.15, 20, 1, true), ceramic);
+        body.position.y = 0.075;
+        bowl.add(body);
+        const bottom = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 20), ceramic);
+        bottom.position.y = 0.02;
+        bowl.add(bottom);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.022, 6, 24), ceramic);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = 0.145;
+        bowl.add(rim);
+        if (variant === "Gamelle d’eau") {
+          const water = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.18, 0.18, 0.012, 20),
+            new THREE.MeshPhysicalMaterial({ color: colors.water, roughness: 0.2, metalness: 0.08 }),
+          );
+          water.position.y = 0.075;
+          bowl.add(water);
+        }
+        bowl.scale.setScalar(sizeScale);
+        bowl.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        bowl.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(bowl);
+        decorationObjects.push(bowl);
+        decorationObjectsById.set(item.id, bowl);
+      } else if (item.kind === "Lampe chauffante") {
+        const lamp = new THREE.Group();
+        lamp.userData.decorationId = item.id;
+        const shade = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.13, 0.26, 0.22, 16, 1, true),
+          new THREE.MeshStandardMaterial({ color: 0x555d57, metalness: 0.35, roughness: 0.55, side: THREE.DoubleSide }),
+        );
+        shade.position.y = -0.08;
+        lamp.add(shade);
+        const bulb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.1, 12, 8),
+          new THREE.MeshStandardMaterial({ color: 0xe9a85d, emissive: 0xe58a3d, emissiveIntensity: 0.65, roughness: 0.35 }),
+        );
+        bulb.position.y = -0.22;
+        lamp.add(bulb);
+        const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.18, 8), frameMaterial);
+        cable.position.y = 0.1;
+        lamp.add(cable);
+        lamp.scale.setScalar(sizeScale);
+        lamp.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        lamp.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(lamp);
+        decorationObjects.push(lamp);
+        decorationObjectsById.set(item.id, lamp);
+      } else if (item.kind === "Tube UVB") {
+        const tube = new THREE.Group();
+        tube.userData.decorationId = item.id;
+        const lightTube = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.035, 0.035, 0.95, 10),
+          new THREE.MeshStandardMaterial({ color: 0xdde8cd, emissive: 0x87a9ad, emissiveIntensity: 0.4, roughness: 0.32 }),
+        );
+        lightTube.rotation.z = Math.PI / 2;
+        lightTube.position.y = -0.05;
+        tube.add(lightTube);
+        const mount = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.07, 0.1), frameMaterial);
+        mount.position.y = 0.04;
+        tube.add(mount);
+        tube.scale.setScalar(sizeScale);
+        tube.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        tube.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(tube);
+        decorationObjects.push(tube);
+        decorationObjectsById.set(item.id, tube);
+      } else {
+        const isPebble = variant === "Galet";
+        const rock = new THREE.Mesh(
+          isPebble ? new THREE.SphereGeometry(0.32, 12, 8) : new THREE.DodecahedronGeometry(0.32, 0),
+          new THREE.MeshStandardMaterial({ color: variant === "Stratifiée" ? 0x9a9284 : item.id % 2 ? 0x9a8b76 : 0x776a5d, roughness: isPebble ? 0.72 : 0.98 }),
+        );
+        const rockScale = variant === "Stratifiée" ? [1.35, 0.48, 1.1] : isPebble ? [1.25, 0.72, 0.95] : [1.2, 0.82, 0.95];
+        rock.scale.set(rockScale[0] * sizeScale, rockScale[1] * sizeScale, rockScale[2] * sizeScale);
+        rock.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        rock.position.set(x, floorY + 0.28 + verticalOffset, z);
+        rock.userData.decorationId = item.id;
+        scene.add(rock);
+        decorationObjects.push(rock);
+        decorationObjectsById.set(item.id, rock);
+      }
+    });
+
+    const backgroundGrid = new THREE.GridHelper(12, 24, 0xadb8aa, 0xcbd1c7);
+    backgroundGrid.position.y = -0.02;
+    backgroundGrid.visible = viewMode !== "plan";
+    scene.add(backgroundGrid);
+
+    const planGridPoints: THREE.Vector3[] = [];
+    for (let centimeters = 0; centimeters < dimensions.width; centimeters += 10) {
+      const x = (centimeters / dimensions.width - 0.5) * width;
+      planGridPoints.push(new THREE.Vector3(x, 0, -depthHalf), new THREE.Vector3(x, 0, depthHalf));
+    }
+    planGridPoints.push(new THREE.Vector3(widthHalf, 0, -depthHalf), new THREE.Vector3(widthHalf, 0, depthHalf));
+    for (let centimeters = 0; centimeters < dimensions.depth; centimeters += 10) {
+      const z = (centimeters / dimensions.depth - 0.5) * depth;
+      planGridPoints.push(new THREE.Vector3(-widthHalf, 0, z), new THREE.Vector3(widthHalf, 0, z));
+    }
+    planGridPoints.push(new THREE.Vector3(-widthHalf, 0, depthHalf), new THREE.Vector3(widthHalf, 0, depthHalf));
+    const planGrid = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(planGridPoints),
+      new THREE.LineBasicMaterial({ color: 0x758a71, transparent: true, opacity: 0.3 }),
+    );
+    planGrid.position.y = floorY + 0.105;
+    planGrid.visible = viewMode === "plan";
+    scene.add(planGrid);
+
+    if (showHabitatZones) {
+      const addFloorZone = (key: HabitatZoneKey, x: number, z: number, radiusX: number, radiusZ: number, color: number, rotation = 0) => {
+        const zone = new THREE.Mesh(
+          new THREE.CircleGeometry(1, 48),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.2, depthWrite: false }),
+        );
+        zone.rotation.set(-Math.PI / 2, THREE.MathUtils.degToRad(rotation), 0);
+        zone.position.set(x, floorY + 0.112 + (key === "uv" ? 0.002 : 0), z);
+        zone.scale.set(radiusX, radiusZ, 1);
+        scene.add(zone);
+      };
+      if (zoneIsDocumented("hot")) equipmentZoneSources.heat.forEach((source) => {
+        addFloorZone("hot", source.x * widthHalf, source.z * depthHalf, width * 0.17, depth * 0.22, 0xc47a53, source.rotation);
+      });
+      if (zoneIsDocumented("cool") && equipmentZoneSources.heat.length > 0) {
+        const heatX = equipmentZoneSources.heat.reduce((sum, source) => sum + source.x, 0) / equipmentZoneSources.heat.length;
+        const heatZ = equipmentZoneSources.heat.reduce((sum, source) => sum + source.z, 0) / equipmentZoneSources.heat.length;
+        const coolX = Math.abs(heatX) < 0.18 ? 0.58 : -heatX;
+        addFloorZone("cool", coolX * widthHalf, -heatZ * depthHalf, width * 0.2, depth * 0.3, 0x6d9fac);
+      }
+      if (zoneIsDocumented("uv")) equipmentZoneSources.uv.forEach((source) => {
+        addFloorZone("uv", source.x * widthHalf, source.z * depthHalf, width * 0.23, depth * 0.16, 0xc4a64e, source.rotation);
+      });
+      if (zoneIsDocumented("retreat")) {
+        decorations.filter((item) => item.kind === "Cachette").forEach((item) => {
+          addFloorZone("retreat", item.position.x * widthHalf, item.position.z * depthHalf, 0.28, 0.24, 0x75837d);
+        });
+      }
+    }
+
+    transformControls.detach();
+    scene.add(transformControls.getHelper());
+    const selectedObject = selectedDecorationIdRef.current === null ? undefined : decorationObjectsById.get(selectedDecorationIdRef.current);
+    if (viewMode === "3d" && selectedObject) transformControls.attach(selectedObject);
+    transformControls.addEventListener("dragging-changed", (event) => {
+      controls.enabled = !event.value;
+    });
+    const saveTransformedDecoration = () => {
+      const object = transformControls.object;
+      if (!object || object.userData.decorationId == null) return;
+      const id = Number(object.userData.decorationId);
+      const decoration = decorations.find((item) => item.id === id);
+      if (!decoration) return;
+      const position = {
+        x: THREE.MathUtils.clamp(object.position.x / widthHalf, -1, 1),
+        y: THREE.MathUtils.clamp((object.position.y - floorY - (decoration.kind === "Roche" ? 0.28 : 0.1)) / height, 0, 1),
+        z: THREE.MathUtils.clamp(object.position.z / depthHalf, -1, 1),
+      };
+      const degrees = THREE.MathUtils.radToDeg(object.rotation.y);
+      onDecorationsChange((current) => rotateDecoration(
+        current.map((item) => item.id === id ? { ...item, position } : item),
+        id,
+        degrees,
+      ));
+    };
+    transformControls.addEventListener("mouseUp", saveTransformedDecoration);
+
+    let draggedObject: THREE.Object3D | null = null;
+    let draggedId: number | null = null;
+    const dragOffset = new THREE.Vector2();
+    const dragStartPointer = new THREE.Vector2();
+    const dragPlane = new THREE.Plane();
+    let dragStartRotation = 0;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(floorY + 0.1));
+    const updatePointerRay = (event: PointerEvent) => {
+      const bounds = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+      pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0 || transformControls.dragging || transformControls.axis !== null) return;
+      updatePointerRay(event);
+      const hit = raycaster.intersectObjects(decorationObjects, true)[0];
+      if (!hit) {
+        selectionHandlerRef.current(null);
+        transformControls.detach();
+        return;
+      }
+      let object: THREE.Object3D | null = hit.object;
+      while (object && object.userData.decorationId == null) object = object.parent;
+      if (!object) return;
+      const id = Number(object.userData.decorationId);
+      selectionHandlerRef.current(id);
+      if (viewMode === "3d") {
+        transformControls.attach(object);
+        draggedObject = object;
+        draggedId = id;
+        dragStartPointer.set(event.clientX, event.clientY);
+        dragStartRotation = object.rotation.y;
+        if (transformMode === "translate") {
+          dragPlane.set(new THREE.Vector3(0, 1, 0), -object.position.y);
+          const point = raycaster.ray.intersectPlane(dragPlane, new THREE.Vector3());
+          if (!point) {
+            draggedObject = null;
+            draggedId = null;
+            return;
+          }
+          dragOffset.set(object.position.x - point.x, object.position.z - point.z);
+        }
+        controls.enabled = false;
+        renderer.domElement.setPointerCapture(event.pointerId);
+        event.preventDefault();
+        return;
+      }
+      const point = raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3());
+      if (!point) return;
+      draggedObject = object;
+      draggedId = id;
+      dragOffset.set(object.position.x - point.x, object.position.z - point.z);
+      controls.enabled = false;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!draggedObject) return;
+      if (viewMode === "3d" && transformMode === "rotate") {
+        draggedObject.rotation.y = dragStartRotation + (event.clientX - dragStartPointer.x) * 0.01;
+        return;
+      }
+      updatePointerRay(event);
+      const point = raycaster.ray.intersectPlane(viewMode === "3d" ? dragPlane : floorPlane, new THREE.Vector3());
+      if (!point) return;
+      draggedObject.position.x = THREE.MathUtils.clamp(point.x + dragOffset.x, -widthHalf + 0.18, widthHalf - 0.18);
+      draggedObject.position.z = THREE.MathUtils.clamp(point.z + dragOffset.y, -depthHalf + 0.18, depthHalf - 0.18);
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (!draggedObject || draggedId === null) return;
+      const id = draggedId;
+      const previousPosition = decorations.find((item) => item.id === id)?.position;
+      const position = { ...previousPosition, x: draggedObject.position.x / widthHalf, z: draggedObject.position.z / depthHalf };
+      const degrees = THREE.MathUtils.radToDeg(draggedObject.rotation.y);
+      draggedObject = null;
+      draggedId = null;
+      controls.enabled = true;
+      if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
+      onDecorationsChange((current) => rotateDecoration(
+        current.map((item) => item.id === id ? { ...item, position } : item),
+        id,
+        degrees,
+      ));
+    };
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointercancel", onPointerUp);
+
+    const resize = () => {
+      const bounds = host.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      camera.aspect = bounds.width / bounds.height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(bounds.width, bounds.height, false);
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(host);
+    resize();
+
+    let frame = 0;
+    const animate = () => {
+      frame = requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      controls.dispose();
+      transformControls.dispose();
+      scene.remove(transformControls.getHelper());
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", onPointerUp);
+      renderer.dispose();
+      host.replaceChildren();
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => material.dispose());
+        }
+      });
+    };
+  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones]);
+
+  return <div className="viewport" ref={viewportRef} data-mode={viewMode} />;
+}

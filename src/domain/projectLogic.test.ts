@@ -19,7 +19,6 @@ import {
   resolveBiotopeSelection,
   resizeDecoration,
   rotateDecoration,
-  plantCatalog,
   renameSavedProjectRecord,
   setDecorationPlantSpecies,
   updateDecorationVariant,
@@ -28,6 +27,7 @@ import {
   type SpeciesProfile,
   type StoredProject,
 } from "./projectLogic";
+import { plantCatalog } from "../data/plantCatalog";
 
 const speciesLabels = ["Pogona vitticeps · Dragon barbu", "Dendrobates tinctorius · Dendrobate"];
 

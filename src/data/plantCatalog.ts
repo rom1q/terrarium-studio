@@ -1,0 +1,123 @@
+import type { PlantProfile } from "../domain/projectLogic";
+
+export const plantCatalog: readonly PlantProfile[] = [
+  {
+    id: "nephrolepis-exaltata",
+    commonName: "Fougère de Boston",
+    scientificName: "Nephrolepis exaltata",
+    visualVariant: "Fougère",
+    careSummary: "Lumière indirecte, chaleur, forte humidité et sol qui ne sèche pas.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "recommended", Paludarium: "unknown" },
+    source: { title: "Nephrolepis exaltata", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/nephrolepis-exaltata/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "chlorophytum-comosum",
+    commonName: "Chlorophyton chevelu",
+    scientificName: "Chlorophytum comosum",
+    visualVariant: "Feuillage dense",
+    careSummary: "Lumière moyenne, sol humide et humidité ambiante moyenne; tolère l’ombre.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "recommended", Paludarium: "unknown" },
+    source: { title: "Chlorophytum comosum", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/chlorophytum-comosum/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "echeveria-elegans",
+    commonName: "Échevéria élégant",
+    scientificName: "Echeveria elegans",
+    visualVariant: "Rosette",
+    careSummary: "Soleil ou mi-ombre et sol sec, peu arrosé et très bien drainé.",
+    biotopeGuidance: { Désertique: "recommended", Tropical: "not-recommended", Paludarium: "not-recommended" },
+    source: { title: "Echeveria elegans", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/echeveria-elegans/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "haworthiopsis-attenuata",
+    commonName: "Haworthiopsis zébrée",
+    scientificName: "Haworthiopsis attenuata",
+    visualVariant: "Rosette",
+    careSummary: "Lumière vive indirecte, substrat très drainant; laisser sécher entre arrosages.",
+    biotopeGuidance: { Désertique: "recommended", Tropical: "not-recommended", Paludarium: "not-recommended" },
+    source: { title: "Haworthiopsis attenuata", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/haworthiopsis-attenuata/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "sempervivum-tectorum",
+    commonName: "Joubarbe des toits",
+    scientificName: "Sempervivum tectorum",
+    visualVariant: "Rosette",
+    careSummary: "Plein soleil, sol sableux ou graveleux très drainant; éviter l’arrosage excessif.",
+    biotopeGuidance: { Désertique: "unknown", Tropical: "not-recommended", Paludarium: "not-recommended" },
+    source: { title: "Sempervivum tectorum", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/sempervivum-tectorum/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "aloe-vera",
+    commonName: "Aloès véritable",
+    scientificName: "Aloe vera",
+    visualVariant: "Rosette",
+    careSummary: "Soleil ou mi-ombre, substrat succulent bien drainé et séchage complet entre arrosages.",
+    biotopeGuidance: { Désertique: "recommended", Tropical: "not-recommended", Paludarium: "not-recommended" },
+    toxicityNote: "NC State signale une toxicité après ingestion pour chiens, chats et chevaux; la sécurité des reptiles n’est pas documentée.",
+    source: { title: "Aloe vera", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/aloe-vera/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "fittonia-albivenis",
+    commonName: "Fittonia (plante mosaïque)",
+    scientificName: "Fittonia albivenis",
+    visualVariant: "Feuillage dense",
+    careSummary: "Lumière tamisée, sol humide mais drainé; l’air sec fait flétrir le feuillage.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "recommended", Paludarium: "unknown" },
+    source: { title: "Fittonia albivenis", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/fittonia-albivenis/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "maranta-leuconeura",
+    commonName: "Maranta (plante dormeuse)",
+    scientificName: "Maranta leuconeura",
+    visualVariant: "Feuillage dense",
+    careSummary: "Lumière indirecte, terreau uniformément humide en croissance et forte humidité.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "recommended", Paludarium: "unknown" },
+    source: { title: "Maranta leuconeura", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/maranta-leuconeura/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "asplenium-nidus",
+    commonName: "Fougère nid d’oiseau",
+    scientificName: "Asplenium nidus",
+    visualVariant: "Fougère",
+    careSummary: "Lumière tamisée, substrat riche et humide mais aéré; ne tolère pas l’air sec.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "recommended", Paludarium: "unknown" },
+    source: { title: "Asplenium nidus", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/asplenium-nidus/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "selaginella-kraussiana",
+    commonName: "Sélaginelle de Krauss",
+    scientificName: "Selaginella kraussiana",
+    visualVariant: "Feuillage dense",
+    careSummary: "Ombre, forte humidité et sol riche constamment frais; éviter le soleil direct.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "recommended", Paludarium: "recommended" },
+    source: { title: "Selaginella kraussiana", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/selaginella-kraussiana/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "cyperus-alternifolius",
+    commonName: "Papyrus parapluie",
+    scientificName: "Cyperus alternifolius",
+    visualVariant: "Feuillage dense",
+    careSummary: "Soleil doux ou mi-ombre et sol qui reste humide à détrempé.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "unknown", Paludarium: "recommended" },
+    source: { title: "Cyperus alternifolius", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/cyperus-alternifolius/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "acorus-gramineus",
+    commonName: "Acore graminée",
+    scientificName: "Acorus gramineus",
+    visualVariant: "Feuillage dense",
+    careSummary: "Mi-ombre à soleil doux; accepte les sols très humides et les conditions partiellement submergées.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "unknown", Paludarium: "recommended" },
+    source: { title: "Acorus gramineus", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/acorus-gramineus/", checkedAt: "2026-11-06" },
+  },
+];
+
+export function getPlantProfile(id: string | undefined): PlantProfile | undefined {
+  return id ? plantCatalog.find((plant) => plant.id === id) : undefined;
+}
+
+export const plantBiotopeStatusLabels = {
+  recommended: "conseillée",
+  "not-recommended": "peu adaptée",
+  unknown: "non documentée",
+} as const;
