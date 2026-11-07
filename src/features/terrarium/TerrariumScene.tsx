@@ -93,6 +93,34 @@ function createSubstrateTexture() {
   return texture;
 }
 
+function createSurfaceNoiseTexture() {
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      let noise = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263);
+      noise = Math.imul(noise ^ (noise >>> 13), 1274126177);
+      noise = (noise ^ (noise >>> 16)) >>> 0;
+      const tone = 116 + noise % 25;
+      const index = (y * size + x) * 4;
+      data[index] = tone;
+      data[index + 1] = tone;
+      data[index + 2] = tone;
+      data[index + 3] = 255;
+    }
+  }
+
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4, 4);
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const cameraViewRef = useRef<CameraViewState | null>(null);
@@ -118,6 +146,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     scene.background = new THREE.Color("#e9ede4");
     const contactShadowTexture = createContactShadowTexture();
     const substrateTexture = createSubstrateTexture();
+    const surfaceNoiseTexture = createSurfaceNoiseTexture();
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
     const previousView = cameraViewRef.current?.viewMode === viewMode ? cameraViewRef.current : null;
     if (viewMode === "plan") {
@@ -259,7 +288,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         decorationObjects.push(plant);
         decorationObjectsById.set(item.id, plant);
       } else if (item.kind === "Cachette") {
-        const hide = createHideModel(variant as "Grotte" | "Tronc creux" | "Écorce creuse");
+        const hide = createHideModel(variant as "Grotte" | "Tronc creux" | "Écorce creuse", surfaceNoiseTexture);
         hide.userData.decorationId = item.id;
         hide.scale.setScalar(sizeScale);
         hide.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
@@ -386,7 +415,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         decorationObjects.push(tube);
         decorationObjectsById.set(item.id, tube);
       } else {
-        const rock = createRockModel(variant as "Roche anguleuse" | "Galet" | "Stratifiée", item.id);
+        const rock = createRockModel(variant as "Roche anguleuse" | "Galet" | "Stratifiée", item.id, surfaceNoiseTexture);
         rock.scale.setScalar(sizeScale);
         rock.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
         rock.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
@@ -712,6 +741,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       });
       contactShadowTexture?.dispose();
       substrateTexture.dispose();
+      surfaceNoiseTexture.dispose();
     };
   }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
 

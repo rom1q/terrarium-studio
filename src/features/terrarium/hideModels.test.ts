@@ -41,4 +41,18 @@ describe("createHideModel", () => {
       expect(size.z).toBeGreaterThan(0.5);
     }
   });
+
+  it("applies surface relief to stone and bark exteriors", () => {
+    const texture = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, THREE.RGBAFormat);
+
+    for (const variant of ["Grotte", "Tronc creux", "Écorce creuse"] as const) {
+      const hide = createHideModel(variant, texture);
+      const exteriorMeshes: THREE.Mesh[] = [];
+      hide.traverse((object) => {
+        if (object instanceof THREE.Mesh) exteriorMeshes.push(object);
+      });
+
+      expect((exteriorMeshes[0].material as THREE.MeshStandardMaterial).bumpMap).toBe(texture);
+    }
+  });
 });

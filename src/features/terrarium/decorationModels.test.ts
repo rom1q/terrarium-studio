@@ -28,4 +28,16 @@ describe("createRockModel", () => {
     expect(size.y).toBeGreaterThan(0.2);
     expect(size.z).toBeGreaterThan(0.5);
   });
+
+  it("applies a shared surface relief texture to every rock variant", () => {
+    const texture = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, THREE.RGBAFormat);
+
+    for (const variant of ["Roche anguleuse", "Galet", "Stratifiée"] as const) {
+      const rock = createRockModel(variant, 1, texture);
+      rock.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        expect((object.material as THREE.MeshStandardMaterial).bumpMap).toBe(texture);
+      });
+    }
+  });
 });

@@ -36,14 +36,15 @@ function createFacetedGeometry(seed: number, baseColor: number) {
   return geometry;
 }
 
-export function createRockModel(variant: RockVariant, seed = 0): THREE.Group {
+export function createRockModel(variant: RockVariant, seed = 0, surfaceNoise?: THREE.Texture): THREE.Group {
   const rock = new THREE.Group();
+  const surfaceRelief = surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.018 } : {};
 
   if (variant === "Galet") {
     const profile = rockGeometryProfiles.pebble;
     const pebble = new THREE.Mesh(
       new THREE.SphereGeometry(profile.radius, 24, 16),
-      new THREE.MeshStandardMaterial({ color: seed % 2 ? 0xaaa18f : 0x918b80, roughness: 0.72 }),
+      new THREE.MeshStandardMaterial({ color: seed % 2 ? 0xaaa18f : 0x918b80, roughness: 0.88, ...surfaceRelief }),
     );
     pebble.scale.set(profile.scale[0], profile.scale[1], profile.scale[2]);
     rock.add(pebble);
@@ -58,6 +59,7 @@ export function createRockModel(variant: RockVariant, seed = 0): THREE.Group {
           color: index === 1 && seed % 2 ? 0x9d9385 : layer.color,
           roughness: 0.96,
           flatShading: true,
+          ...surfaceRelief,
         }),
       );
       mesh.position.y = layer.y;
@@ -71,7 +73,7 @@ export function createRockModel(variant: RockVariant, seed = 0): THREE.Group {
   const baseColor = seed % 2 ? 0x80796d : 0x978875;
   const body = new THREE.Mesh(
     createFacetedGeometry(seed, baseColor),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.98, flatShading: true }),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.98, flatShading: true, ...surfaceRelief }),
   );
   body.scale.set(profile.scale[0], profile.scale[1], profile.scale[2]);
   body.rotation.y = seed % 3 * 0.22;
