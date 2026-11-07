@@ -36,6 +36,7 @@ import {
   getDecorationVariantsForBiotope,
   getDefaultDecorationVariant,
   getHabitatZoneGuidance,
+  getPlantBiotopeStatus,
   isStoredProject,
   measureDecorationPlacement,
   parseProjectExport,
@@ -45,7 +46,9 @@ import {
   removeSavedProjectRecord,
   resizeDecoration,
   rotateDecoration,
+  plantCatalog,
   renameSavedProjectRecord,
+  setDecorationPlantSpecies,
   updateDecorationVariant,
   type Biotope,
   type DecorationKind,
@@ -147,6 +150,16 @@ function DecorationIcon({ kind, size }: { kind: DecorationKind; size: number }) 
   if (kind === "Gamelle") return <Waves size={size} />;
   return <span className="rock-icon" />;
 }
+
+function getPlantProfile(id: string | undefined) {
+  return id ? plantCatalog.find((plant) => plant.id === id) : undefined;
+}
+
+const plantBiotopeStatusLabels = {
+  recommended: "conseillée",
+  "not-recommended": "peu adaptée",
+  unknown: "non documentée",
+} as const;
 
 const habitatZoneLabels: Record<HabitatZoneKey, string> = {
   hot: "Zone chaude",
@@ -397,7 +410,8 @@ function App() {
       const z = item.position.z * depthHalf;
       const verticalOffset = (item.position.y ?? 0) * height;
       const sizeScale = (item.size ?? 100) / 100;
-      const variant = item.variant ?? getDefaultDecorationVariant(item.kind, biotope);
+      const plantProfile = item.kind === "Plante" ? getPlantProfile(item.plantSpeciesId) : undefined;
+      const variant = item.variant ?? plantProfile?.visualVariant ?? getDefaultDecorationVariant(item.kind, biotope);
       if (item.kind === "Plante") {
         const plant = new THREE.Group();
         plant.userData.decorationId = item.id;
@@ -805,6 +819,10 @@ function App() {
     setDecorations((current) => updateDecorationVariant(current, id, variant));
   };
 
+  const updateBotanicalPlant = (id: number, plantSpeciesId: string) => {
+    setDecorations((current) => setDecorationPlantSpecies(current, id, plantSpeciesId || undefined));
+  };
+
   const duplicateSelectedDecoration = () => {
     const id = selectedDecorationIdRef.current;
     if (id === null || !decorations.some((item) => item.id === id)) return;
@@ -1094,6 +1112,10 @@ function App() {
   const decorationCounts = (["Plante", "Cachette", "Roche", "Branche", "Plateforme", "Gamelle"] as const)
     .map((kind) => ({ kind, count: decorations.filter((item) => item.kind === kind).length }))
     .filter((item) => item.count > 0);
+  const plantCatalogOptions = [...plantCatalog].sort((first, second) => {
+    const priority = { recommended: 0, unknown: 1, "not-recommended": 2 };
+    return priority[getPlantBiotopeStatus(first, biotope)] - priority[getPlantBiotopeStatus(second, biotope)];
+  });
 
   const updateMeasurement = (key: MeasurementKey, value: string) => {
     const numericValue = value === "" ? null : Number(value);
@@ -1197,6 +1219,8 @@ function App() {
                 const selectedVariant = item.variant ?? getDefaultDecorationVariant(item.kind, biotope);
                 const variantOptions = getDecorationVariantsForBiotope(item.kind, biotope);
                 const variantIsSuggested = variantOptions.includes(selectedVariant);
+                const plantProfile = item.kind === "Plante" ? getPlantProfile(item.plantSpeciesId) : undefined;
+                const plantBiotopeStatus = plantProfile ? getPlantBiotopeStatus(plantProfile, biotope) : undefined;
                 return <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
                   <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}><DecorationIcon kind={item.kind} size={14} /></span>
                   <div className="decor-editor">
@@ -1209,8 +1233,10 @@ function App() {
                       <button type="button" aria-label="Dupliquer" title="Dupliquer" onClick={duplicateSelectedDecoration}><Copy size={13} /></button>
                       <button type="button" className="transform-delete" aria-label="Supprimer" title="Supprimer" onClick={() => removeDecoration(item.id)}><Trash2 size={13} /></button>
                     </div>}
+                    {item.kind === "Plante" && <label className="decor-variant-control"><span>Espèce</span><select aria-label="Espèce botanique de la plante" value={item.plantSpeciesId ?? ""} onChange={(event) => updateBotanicalPlant(item.id, event.target.value)}><option value="">Style visuel uniquement</option>{plantCatalogOptions.map((plant) => <option key={plant.id} value={plant.id}>{plant.commonName} · {plantBiotopeStatusLabels[getPlantBiotopeStatus(plant, biotope)]}</option>)}</select></label>}
                     <label className="decor-variant-control"><span>Type</span><select aria-label={`Type de ${item.kind}`} value={selectedVariant} onChange={(event) => updateDecorationVariantChoice(item.id, event.target.value)}>{!variantIsSuggested && <option value={selectedVariant}>{selectedVariant} · non proposé pour {biotope.toLowerCase()}</option>}{variantOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-                    {item.kind === "Plante" && <small className={`plant-variant-note ${variantIsSuggested ? "" : "not-suggested"}`}>{variantIsSuggested ? "Style visuel uniquement; vérifiez l’espèce botanique." : `Style non proposé pour le biotope ${biotope.toLowerCase()}.`}</small>}
+                    {item.kind === "Plante" && !plantProfile && <small className={`plant-variant-note ${variantIsSuggested ? "" : "not-suggested"}`}>{variantIsSuggested ? "Modèle visuel uniquement; choisissez une espèce botanique pour afficher ses besoins." : `Style non proposé pour le biotope ${biotope.toLowerCase()}.`}</small>}
+                    {plantProfile && plantBiotopeStatus && <div className={`plant-profile-note ${plantBiotopeStatus}`}><span>{plantProfile.scientificName} · {plantProfile.careSummary}</span><strong>Biotope {plantBiotopeStatusLabels[plantBiotopeStatus]}</strong><small>Compatibilité et toxicité pour reptiles non documentées.</small><a href={plantProfile.source.url} target="_blank" rel="noreferrer">Source · {plantProfile.source.publisher}</a></div>}
                     <div className="decor-coordinate-grid">
                       <label><span>X · gauche</span><input type="number" min="0" max={dimensions.width} step="1" aria-label={`Position X de ${item.kind} en centimètres`} value={item.xCm} onChange={(event) => updateDecorationPosition(item.id, "x", event.target.value)} /></label>
                       <label><span>Z · haut</span><input type="number" min="0" max={dimensions.depth} step="1" aria-label={`Position Z de ${item.kind} en centimètres`} value={item.zCm} onChange={(event) => updateDecorationPosition(item.id, "z", event.target.value)} /></label>
@@ -1336,7 +1362,7 @@ function App() {
               <h4>Décor à prévoir</h4>
               {decorationCounts.length === 0 ? <p className="report-no-decor">Aucun élément de décor placé.</p> : <>
                 <div className="report-material-counts">{decorationCounts.map((item) => <span key={item.kind}>{item.kind} <strong>× {item.count}</strong></span>)}</div>
-                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}><DecorationIcon kind={item.kind} size={13} /></span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)}</strong><small>X {item.xCm} cm depuis la gauche · Y {item.yCm} cm au-dessus du fond · Z {item.zCm} cm depuis le haut · rotation Y {item.rotation ?? 0}° · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
+                <ul className="report-material-list">{positionedDecorations.map((item, index) => { const plantProfile = getPlantProfile(item.plantSpeciesId); return <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}><DecorationIcon kind={item.kind} size={13} /></span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)}{plantProfile ? ` · ${plantProfile.scientificName}` : ""}</strong><small>X {item.xCm} cm depuis la gauche · Y {item.yCm} cm au-dessus du fond · Z {item.zCm} cm depuis le haut · rotation Y {item.rotation ?? 0}° · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm{plantProfile ? " · compatibilité reptile non documentée" : ""}</small>{plantProfile && <a className="plant-report-source" href={plantProfile.source.url} target="_blank" rel="noreferrer">Source · {plantProfile.source.publisher}</a>}</span></li>; })}</ul>
               </>}
             </section>
             <h3>Critères et relevés</h3>

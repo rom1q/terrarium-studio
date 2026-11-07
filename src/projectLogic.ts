@@ -13,6 +13,45 @@ export const decorationVariants = {
 } as const;
 export type DecorationKind = keyof typeof decorationVariants;
 export type DecorationVariant = (typeof decorationVariants)[DecorationKind][number];
+export type PlantBiotopeStatus = "recommended" | "not-recommended" | "unknown";
+export type PlantProfile = {
+  id: string;
+  commonName: string;
+  scientificName: string;
+  visualVariant: Extract<DecorationVariant, "Feuillage dense" | "Fougère" | "Rosette">;
+  careSummary: string;
+  biotopeGuidance: Partial<Record<Biotope, PlantBiotopeStatus>>;
+  source: SpeciesSource;
+};
+export const plantCatalog: readonly PlantProfile[] = [
+  {
+    id: "nephrolepis-exaltata",
+    commonName: "Fougère de Boston",
+    scientificName: "Nephrolepis exaltata",
+    visualVariant: "Fougère",
+    careSummary: "Lumière indirecte, chaleur, forte humidité et sol qui ne sèche pas.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "recommended", Paludarium: "unknown" },
+    source: { title: "Nephrolepis exaltata", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/nephrolepis-exaltata/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "chlorophytum-comosum",
+    commonName: "Chlorophyton chevelu",
+    scientificName: "Chlorophytum comosum",
+    visualVariant: "Feuillage dense",
+    careSummary: "Lumière moyenne, sol humide et humidité ambiante moyenne; tolère l’ombre.",
+    biotopeGuidance: { Désertique: "not-recommended", Tropical: "recommended", Paludarium: "unknown" },
+    source: { title: "Chlorophytum comosum", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/chlorophytum-comosum/", checkedAt: "2026-11-06" },
+  },
+  {
+    id: "echeveria-elegans",
+    commonName: "Échevéria élégant",
+    scientificName: "Echeveria elegans",
+    visualVariant: "Rosette",
+    careSummary: "Soleil ou mi-ombre et sol sec, peu arrosé et très bien drainé.",
+    biotopeGuidance: { Désertique: "recommended", Tropical: "not-recommended", Paludarium: "not-recommended" },
+    source: { title: "Echeveria elegans", publisher: "NC State Extension", url: "https://plants.ces.ncsu.edu/plants/echeveria-elegans/", checkedAt: "2026-11-06" },
+  },
+];
 export const defaultDecorationVariant: Record<DecorationKind, DecorationVariant> = {
   Plante: "Feuillage dense",
   Roche: "Roche anguleuse",
@@ -26,7 +65,7 @@ export const plantStylesByBiotope: Record<Biotope, readonly Extract<DecorationVa
   Tropical: ["Feuillage dense", "Fougère"],
   Paludarium: ["Feuillage dense", "Fougère"],
 };
-export type Decoration = { id: number; kind: DecorationKind; variant?: DecorationVariant; position: { x: number; y?: number; z: number }; size?: number; rotation?: number };
+export type Decoration = { id: number; kind: DecorationKind; variant?: DecorationVariant; plantSpeciesId?: string; position: { x: number; y?: number; z: number }; size?: number; rotation?: number };
 export type DecorationAxis = "x" | "y" | "z";
 export type PositionedDecoration = Decoration & { xCm: number; yCm: number; zCm: number; nearestWallCm: number };
 export type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
@@ -113,6 +152,25 @@ export function getDefaultDecorationVariant(kind: DecorationKind, biotope: Bioto
   return kind === "Plante" ? plantStylesByBiotope[biotope][0] : defaultDecorationVariant[kind];
 }
 
+export function getPlantBiotopeStatus(plant: PlantProfile, biotope: Biotope): PlantBiotopeStatus {
+  return plant.biotopeGuidance[biotope] ?? "unknown";
+}
+
+export function setDecorationPlantSpecies(decorations: Decoration[], id: number, plantSpeciesId: string | undefined): Decoration[] {
+  const target = decorations.find((item) => item.id === id);
+  if (!target || target.kind !== "Plante") return decorations;
+  const plant = plantSpeciesId ? plantCatalog.find((item) => item.id === plantSpeciesId) : undefined;
+  if (plantSpeciesId && !plant) return decorations;
+  return decorations.map((item) => {
+    if (item.id !== id) return item;
+    if (!plant) {
+      const { plantSpeciesId: _plantSpeciesId, ...withoutSpecies } = item;
+      return withoutSpecies;
+    }
+    return { ...item, plantSpeciesId: plant.id, variant: plant.visualVariant };
+  });
+}
+
 export function measureDecorationPlacement(
   decorations: Decoration[],
   dimensions: { width: number; depth: number; height: number },
@@ -192,12 +250,13 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
     const isValidKind = ["Plante", "Cachette", "Roche", "Branche", "Plateforme", "Gamelle"].includes(decoration.kind as string);
     const allowedVariants: readonly string[] = isValidKind ? decorationVariants[decoration.kind as DecorationKind] : [];
     const isValidVariant = decoration.variant === undefined || (typeof decoration.variant === "string" && allowedVariants.includes(decoration.variant));
+    const isValidPlantSpecies = decoration.plantSpeciesId === undefined || (decoration.kind === "Plante" && typeof decoration.plantSpeciesId === "string" && plantCatalog.some((plant) => plant.id === decoration.plantSpeciesId));
     const isValidPosition = typeof position === "object" && position !== null &&
       typeof (position as Record<string, unknown>).x === "number" &&
       typeof (position as Record<string, unknown>).z === "number" &&
       ((position as Record<string, unknown>).y === undefined || (typeof (position as Record<string, unknown>).y === "number" && Number.isFinite((position as Record<string, unknown>).y) && (position as Record<string, number>).y >= 0 && (position as Record<string, number>).y <= 1));
     return Number.isInteger(decoration.id) &&
-      isValidKind && isValidVariant &&
+      isValidKind && isValidVariant && isValidPlantSpecies &&
       isValidPosition &&
       (decoration.size === undefined || (typeof decoration.size === "number" && Number.isFinite(decoration.size) && decoration.size >= 50 && decoration.size <= 150)) &&
       (decoration.rotation === undefined || (typeof decoration.rotation === "number" && Number.isFinite(decoration.rotation) && decoration.rotation >= 0 && decoration.rotation < 360));

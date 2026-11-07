@@ -6,6 +6,7 @@ import {
   duplicateDecoration,
   getBiotopeGuidance,
   getHabitatZoneGuidance,
+  getPlantBiotopeStatus,
   getDecorationVariantsForBiotope,
   getDefaultDecorationVariant,
   isStoredProject,
@@ -17,7 +18,9 @@ import {
   resolveBiotopeSelection,
   resizeDecoration,
   rotateDecoration,
+  plantCatalog,
   renameSavedProjectRecord,
+  setDecorationPlantSpecies,
   updateDecorationVariant,
   type Measurements,
   type ProjectExport,
@@ -100,6 +103,8 @@ describe("project export validation", () => {
     ["decoration size outside supported range", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], size: 151 }] } }],
     ["decoration rotation outside supported range", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], rotation: 360 }] } }],
     ["variant incompatible with decoration kind", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], kind: "Plante", variant: "Grotte" }] } }],
+    ["unknown botanical species", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], kind: "Plante", plantSpeciesId: "unknown-plant" }] } }],
+    ["botanical species on a non-plant decoration", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], plantSpeciesId: "echeveria-elegans" }] } }],
     ["duplicate decoration IDs", { ...projectExport, project: { ...project, decorations: [project.decorations[0], { ...project.decorations[1], id: project.decorations[0].id }] } }],
   ])("rejects %s", (_reason, invalidExport) => {
     expect(parseProjectExport(invalidExport, speciesLabels)).toBeNull();
@@ -256,11 +261,12 @@ describe("dimensioned plan placement", () => {
     const catalogProject = {
       ...project,
       decorations: [
-        { id: 3, kind: "Branche", variant: "Branche fourchue", position: { x: 0, y: 0.4, z: 0 }, rotation: 90 },
-        { id: 4, kind: "Plateforme", variant: "Plateforme en bois", position: { x: 0.2, y: 0.5, z: 0.1 } },
-        { id: 5, kind: "Gamelle", variant: "Gamelle d’eau", position: { x: -0.2, z: -0.1 } },
+        { id: 3, kind: "Plante", variant: "Rosette", plantSpeciesId: "echeveria-elegans", position: { x: 0, y: 0.4, z: 0 }, rotation: 90 },
+        { id: 4, kind: "Branche", variant: "Branche fourchue", position: { x: 0.2, y: 0.4, z: 0 } },
+        { id: 5, kind: "Plateforme", variant: "Plateforme en bois", position: { x: 0.2, y: 0.5, z: 0.1 } },
+        { id: 6, kind: "Gamelle", variant: "Gamelle d’eau", position: { x: -0.2, z: -0.1 } },
       ],
-      nextId: 6,
+      nextId: 7,
     };
 
     expect(parseProjectExport({ ...projectExport, project: catalogProject }, speciesLabels)?.decorations).toEqual(catalogProject.decorations);
@@ -337,5 +343,26 @@ describe("saved project management", () => {
 
     expect(removeSavedProjectRecord([project, second], project.id)).toEqual([second]);
     expect(removeSavedProjectRecord([project], "missing")).toEqual([project]);
+  });
+});
+
+describe("botanical plant catalog", () => {
+  it("recommends plants from sourced growing conditions without asserting reptile safety", () => {
+    const fern = plantCatalog.find((plant) => plant.id === "nephrolepis-exaltata");
+    const succulent = plantCatalog.find((plant) => plant.id === "echeveria-elegans");
+
+    expect(fern?.source.publisher).toBe("NC State Extension");
+    expect(getPlantBiotopeStatus(fern!, "Tropical")).toBe("recommended");
+    expect(getPlantBiotopeStatus(fern!, "Paludarium")).toBe("unknown");
+    expect(getPlantBiotopeStatus(succulent!, "Désertique")).toBe("recommended");
+  });
+
+  it("assigns only known plants to plant decorations and selects their matching visual form", () => {
+    const decoration = { id: 8, kind: "Plante" as const, position: { x: 0, z: 0 } };
+    const assigned = setDecorationPlantSpecies([decoration], decoration.id, "echeveria-elegans");
+
+    expect(assigned[0]).toMatchObject({ plantSpeciesId: "echeveria-elegans", variant: "Rosette" });
+    expect(setDecorationPlantSpecies([decoration], decoration.id, "unknown-plant")).toEqual([decoration]);
+    expect(setDecorationPlantSpecies([decoration], decoration.id, undefined)[0]).toEqual(decoration);
   });
 });
