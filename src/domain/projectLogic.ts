@@ -61,7 +61,9 @@ export type SpeciesProfile = {
   commonName: string;
   source: SpeciesSource | null;
   stageGuidance?: Partial<Record<LifeStage, string>>;
+  environmentGuidance?: string;
   minimumDimensions: { width: number; depth: number; height: number } | null;
+  dimensionGuidance?: string;
   referenceRanges: ReferenceRanges | null;
   hidesAtBothEnds: boolean | null;
   biotopeGuidance?: Partial<Record<Biotope, BiotopeGuidance>>;
@@ -90,7 +92,7 @@ export type ProjectCheckSummary = {
   overallStatus: string;
 };
 export type ProjectCheckInput = {
-  species: Pick<SpeciesProfile, "minimumDimensions" | "referenceRanges" | "hidesAtBothEnds">;
+  species: Pick<SpeciesProfile, "minimumDimensions" | "dimensionGuidance" | "referenceRanges" | "hidesAtBothEnds">;
   dimensions: { width: number; depth: number; height: number };
   shape?: Shape;
   biotope?: Biotope;
@@ -337,7 +339,7 @@ export function calculateProjectChecks({ species, dimensions, shape = "Basse", b
     {
       label: "Dimensions minimales",
       status: minimumDimensions === null ? "unknown" : dimensionsMeetMinimum ? "met" : "insufficient",
-      detail: minimumDimensions === null ? "Non documenté" : `${dimensionsMeetMinimum ? "Respecté" : "Insuffisant"} · min. ${minimumDimensions.width} × ${minimumDimensions.depth} × ${minimumDimensions.height} cm`,
+      detail: minimumDimensions === null ? species.dimensionGuidance ?? "Non documenté" : `${dimensionsMeetMinimum ? "Respecté" : "Insuffisant"} · min. ${minimumDimensions.width} × ${minimumDimensions.depth} × ${minimumDimensions.height} cm`,
     },
     rangeCheck("Zone chaude", "hotSideTemperature", "°C"),
     rangeCheck("Zone fraîche", "coolSideTemperature", "°C"),

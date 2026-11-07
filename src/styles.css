@@ -213,6 +213,7 @@ h1, h2, p { margin-top: 0; }
 .stage-dimensions { font: 500 10px var(--display); color: #89948a; padding-top: 8px; }
 .viewport-wrap { position: relative; min-height: 390px; flex: 1; border: 1px solid #dfe4da; border-radius: 6px; overflow: hidden; background: #e9ede4; }
 .viewport { position: absolute; inset: 0; }
+.scene-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #53614f; font-size: 13px; }
 .viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .viewport-label { position: absolute; z-index: 1; top: 13px; left: 14px; display: flex; align-items: center; gap: 9px; color: #7f8b80; font-size: 8px; font-weight: 700; letter-spacing: 0; }
 .viewport-label .live-dot { width: 6px; height: 6px; }

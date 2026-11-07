@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useReducer, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   AlertTriangle,
@@ -56,7 +56,7 @@ import {
 import { getPlantProfile } from "../data/plantCatalog";
 import { speciesCatalog as speciesList, speciesLabels } from "../data/speciesCatalog";
 import { DecorationIcon, DecorationPanel, decorationKindClass } from "../features/terrarium/DecorationPanel";
-import { TerrariumScene } from "../features/terrarium/TerrariumScene";
+const TerrariumScene = lazy(() => import("../features/terrarium/TerrariumScene").then((module) => ({ default: module.TerrariumScene })));
 import { applyDecorationLayoutSuggestion } from "../domain/layoutValidation";
 import type { LayoutSuggestion, LayoutWarning } from "../domain/layoutValidation";
 import { createProjectHistory, describeProjectHistoryDifference, projectHistoryReducer } from "../domain/projectHistory";
@@ -813,6 +813,7 @@ function App() {
                 <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
               </div>
               <p className="measurement-note">{lifeStage === "adult" ? `Repères ${selectedSpecies.source?.publisher} pour adulte; températures en °C converties si nécessaire.` : "Relevés conservés, mais aucune plage juvénile vérifiée ne permet de les comparer."} Mesurez chaque zone séparément.</p>
+              {selectedSpecies.environmentGuidance && <p className="measurement-note">{selectedSpecies.environmentGuidance}</p>}
             </div>}
           </section>
         </aside>
@@ -870,7 +871,9 @@ function App() {
             </div>}
           </section>}
           <div className="viewport-wrap">
-            <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} previewedLayoutSuggestion={previewedLayoutSuggestion} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />
+            <Suspense fallback={<div className="scene-loading" role="status">Chargement de la scène…</div>}>
+              <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} previewedLayoutSuggestion={previewedLayoutSuggestion} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />
+            </Suspense>
             <div className="viewport-label"><span className="live-dot" /> {viewMode === "plan" ? "VUE EN PLAN" : "APERÇU EN DIRECT"}</div>
             <div className="viewport-tools"><button type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={16} /></button></div>
             {showHabitatZones && <div className="habitat-zone-guide" aria-label="Disponibilité des zones selon les sources">
@@ -971,6 +974,7 @@ function App() {
               </div>)}
             </div>
             {selectedSpecies.stageGuidance?.[lifeStage] && <section className="report-stage-guidance"><h3>Repère alimentaire · {selectedSpecies.source?.publisher}</h3><p>{selectedSpecies.stageGuidance[lifeStage]}</p></section>}
+            {selectedSpecies.environmentGuidance && <section className="report-stage-guidance"><h3>Repère environnemental · {selectedSpecies.source?.publisher}</h3><p>{selectedSpecies.environmentGuidance}</p></section>}
             <section className="report-reference"><h3>Référence consultée</h3>{selectedSpecies.source ? <><a href={selectedSpecies.source.url} target="_blank" rel="noreferrer">{selectedSpecies.source.title} · {selectedSpecies.source.publisher}</a><p>Consultée le {selectedSpecies.source.checkedAt}. Les repères ne remplacent pas le guide complet.</p></> : <p>Aucune référence de maintenance vérifiée pour cette espèce.</p>}</section>
             <p className="report-disclaimer">Ce bilan est partiel; les critères non documentés ne sont pas considérés comme conformes. Il ne certifie pas un habitat et ne remplace pas l’avis d’un vétérinaire spécialisé.</p>
             <div className="report-actions"><button type="button" className="cancel-button" onClick={() => setShowReport(false)}>Fermer</button><button type="button" className="save-button" onClick={() => window.print()}><Printer size={15} /> Imprimer / PDF</button></div>

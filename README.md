@@ -1,16 +1,18 @@
 # Terrarium Studio
 
-Configurateur web en cours de création pour concevoir un terrarium, visualiser son aménagement en 3D et, à terme, vérifier les besoins d'une espèce à partir de références documentées.
+Configurateur web pour concevoir un terrarium, visualiser son aménagement en 3D et comparer certains paramètres d'habitat à des références documentées.
 
-## Prototype
+## Fonctionnalités
 
-La première version propose une scène 3D manipulable, le choix du format et des dimensions, trois biotopes, quelques éléments de décor et une sélection d'espèces. Le volet de conformité est volontairement signalé comme incomplet : aucune exigence d'élevage n'est affirmée sans fiche d'espèce sourcée.
+- Scène 3D manipulable, formats et dimensions, trois biotopes, décor et plantes.
+- Projets enregistrés localement, import/export JSON, historique annulable et points de restauration nommés.
+- Vue en plan cotée, rapport imprimable et vérifications d'implantation.
+- Catalogue de six espèces. Cinq fiches ont une référence consultée; le dendrobate n'a pas encore de source de maintenance vérifiée.
+- Les critères non documentés restent inconnus. Le bilan ne certifie pas un habitat et ne remplace pas l'avis d'un vétérinaire spécialisé.
 
 ## Lancer le projet
 
 Prérequis : Node.js 20.19+ ou 22.12+ et npm.
-
-Sous Windows, double-cliquez sur `start-terrarium.cmd` pour installer les dépendances manquantes, lancer le serveur et ouvrir l’application dans votre navigateur.
 
 ```powershell
 npm install
@@ -29,11 +31,22 @@ Pour lancer les tests unitaires :
 npm test
 ```
 
-## Pistes de développement
+Pour lancer les tests navigateur Playwright, installez Chromium une première fois :
 
-- Ajouter des paramètres de placement et une sauvegarde de projets.
-- Créer une base d'espèces avec sources, dates de vérification et niveaux de confiance.
-- Implémenter un moteur de règles séparant les critères obligatoires, recommandés et inconnus.
-- Ajouter une vue en plan et des exports de plans et de listes de matériel.
+```powershell
+npx playwright install chromium
+npm run test:e2e
+```
 
-Les alertes futures devront rester explicables, citer leurs références et distinguer un manque de données d'une non-conformité confirmée. L'application ne remplace pas l'avis d'un vétérinaire spécialisé.
+Pour produire le bundle de production :
+
+```powershell
+npm run build
+```
+
+## À poursuivre
+
+- Ajouter des fiches d'espèces et des étapes de vie à partir de références spécifiques et vérifiables.
+- Étendre les tests navigateur aux workflows d'édition, d'import/export et de rapport.
+
+Les alertes doivent rester explicables, citer leurs références et distinguer un manque de données d'une non-conformité confirmée.
