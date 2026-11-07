@@ -27,6 +27,12 @@ type TerrariumSceneProps = {
   onDecorationSelectionChange: (id: number | null) => void;
   onDecorationsChange: Dispatch<SetStateAction<Decoration[]>>;
 };
+type CameraViewState = {
+  viewMode: "3d" | "plan";
+  position: [number, number, number];
+  up: [number, number, number];
+  target: [number, number, number];
+};
 
 const biotopeColors: Record<Biotope, { ground: number; plant: number; water: number }> = {
   Désertique: { ground: 0xcda875, plant: 0x74884b, water: 0x8dbdc1 },
@@ -40,12 +46,16 @@ function getPlantProfile(id: string | undefined) {
 
 export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const cameraViewRef = useRef<CameraViewState | null>(null);
+  const habitatZoneGuidanceRef = useRef(habitatZoneGuidance);
   const selectionHandlerRef = useRef(onDecorationSelectionChange);
   const selectedDecorationIdRef = useRef(selectedDecorationId);
   const activeLayoutWarningRef = useRef(activeLayoutWarning);
   const previewedLayoutSuggestionRef = useRef(previewedLayoutSuggestion);
   const activeLayoutWarningKey = activeLayoutWarning ? JSON.stringify(activeLayoutWarning) : "";
   const previewedLayoutSuggestionKey = previewedLayoutSuggestion ? JSON.stringify(previewedLayoutSuggestion) : "";
+  const habitatZoneGuidanceKey = habitatZoneGuidance.map((zone) => `${zone.key}:${zone.status}`).join("|");
+  habitatZoneGuidanceRef.current = habitatZoneGuidance;
   selectionHandlerRef.current = onDecorationSelectionChange;
   selectedDecorationIdRef.current = selectedDecorationId;
   activeLayoutWarningRef.current = activeLayoutWarning;
@@ -58,11 +68,16 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#e9ede4");
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+    const previousView = cameraViewRef.current?.viewMode === viewMode ? cameraViewRef.current : null;
     if (viewMode === "plan") {
       camera.up.set(0, 0, -1);
       camera.position.set(0, 8.5, 0);
     } else {
       camera.position.set(4.8, 3.8, 5.7);
+    }
+    if (previousView) {
+      camera.position.set(...previousView.position);
+      camera.up.set(...previousView.up);
     }
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -84,6 +99,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     controls.enableDamping = true;
     controls.dampingFactor = 0.07;
     controls.target.set(0, viewMode === "plan" ? 0.22 : 0.9, 0);
+    if (previousView) controls.target.set(...previousView.target);
     controls.minDistance = 3.2;
     controls.maxDistance = 11;
     controls.maxPolarAngle = Math.PI * 0.48;
@@ -97,7 +113,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     const { width, depth, height } = getTerrariumSceneDimensions(shape, dimensions);
     const floorY = 0.12;
     const colors = biotopeColors[biotope];
-    const zoneIsDocumented = (key: HabitatZoneKey) => habitatZoneGuidance.find((zone) => zone.key === key)?.status === "documented";
+    const zoneIsDocumented = (key: HabitatZoneKey) => habitatZoneGuidanceRef.current.find((zone) => zone.key === key)?.status === "documented";
     const equipmentZoneSources = getEquipmentZoneSources(decorations);
     const glass = new THREE.MeshPhysicalMaterial({
       color: 0xd9e6d9,
@@ -462,6 +478,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
 
     let draggedObject: THREE.Object3D | null = null;
     let draggedId: number | null = null;
+    let dragMoved = false;
     const dragOffset = new THREE.Vector2();
     const dragStartPointer = new THREE.Vector2();
     const dragPlane = new THREE.Plane();
@@ -489,11 +506,12 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       if (!object) return;
       const id = Number(object.userData.decorationId);
       selectionHandlerRef.current(id);
+      dragMoved = false;
+      dragStartPointer.set(event.clientX, event.clientY);
       if (viewMode === "3d") {
         transformControls.attach(object);
         draggedObject = object;
         draggedId = id;
-        dragStartPointer.set(event.clientX, event.clientY);
         dragStartRotation = object.rotation.y;
         if (transformMode === "translate") {
           dragPlane.set(new THREE.Vector3(0, 1, 0), -object.position.y);
@@ -521,6 +539,8 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     };
     const onPointerMove = (event: PointerEvent) => {
       if (!draggedObject) return;
+      if (!dragMoved && Math.hypot(event.clientX - dragStartPointer.x, event.clientY - dragStartPointer.y) < 3) return;
+      dragMoved = true;
       if (viewMode === "3d" && transformMode === "rotate") {
         draggedObject.rotation.y = dragStartRotation + (event.clientX - dragStartPointer.x) * 0.01;
         return;
@@ -537,10 +557,13 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       const previousPosition = decorations.find((item) => item.id === id)?.position;
       const position = { ...previousPosition, x: draggedObject.position.x / widthHalf, z: draggedObject.position.z / depthHalf };
       const degrees = THREE.MathUtils.radToDeg(draggedObject.rotation.y);
+      const shouldSavePosition = dragMoved;
       draggedObject = null;
       draggedId = null;
+      dragMoved = false;
       controls.enabled = true;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
+      if (!shouldSavePosition) return;
       onDecorationsChange((current) => rotateDecoration(
         current.map((item) => item.id === id ? { ...item, position } : item),
         id,
@@ -572,6 +595,12 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     animate();
 
     return () => {
+      cameraViewRef.current = {
+        viewMode,
+        position: [camera.position.x, camera.position.y, camera.position.z],
+        up: [camera.up.x, camera.up.y, camera.up.z],
+        target: [controls.target.x, controls.target.y, controls.target.z],
+      };
       cancelAnimationFrame(frame);
       observer.disconnect();
       controls.dispose();
@@ -591,7 +620,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         }
       });
     };
-  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
+  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
 
   return <div className="viewport" ref={viewportRef} data-mode={viewMode} />;
 }

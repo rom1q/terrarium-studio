@@ -31,6 +31,30 @@ test("a named checkpoint survives reload and restores the project", async ({ pag
   await expect(page.getByLabel("Largeur en centimètres")).toHaveValue("120");
 });
 
+test("selecting a scene object does not recreate the viewport", async ({ page }) => {
+  await page.goto("/");
+  const canvas = page.locator(".viewport canvas");
+  await expect(canvas).toBeVisible();
+  await canvas.evaluate((element) => {
+    (window as Window & { initialTerrariumCanvas?: HTMLCanvasElement }).initialTerrariumCanvas = element;
+  });
+
+  const canvasBounds = await canvas.boundingBox();
+  if (!canvasBounds) throw new Error("Terrarium canvas bounds not available");
+  const selectionTools = page.getByRole("group", { name: /Outils pour/ });
+  const candidatePoints = [0.42, 0.5, 0.58].flatMap((x) => [0.48, 0.56, 0.64].map((y) => ({ x: canvasBounds.width * x, y: canvasBounds.height * y })));
+  for (const point of candidatePoints) {
+    await canvas.click({ position: point });
+    if (await selectionTools.count()) break;
+  }
+
+  await expect(selectionTools.first()).toBeVisible();
+  const canvasWasPreserved = await canvas.evaluate((element) => {
+    return (window as Window & { initialTerrariumCanvas?: HTMLCanvasElement }).initialTerrariumCanvas === element;
+  });
+  expect(canvasWasPreserved).toBe(true);
+});
+
 test("a crested gecko hatchling uses its sourced stage profile", async ({ page }) => {
   await page.goto("/");
   const workflowSections = page.locator(".left-panel > .form-section");
