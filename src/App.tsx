@@ -13,6 +13,7 @@ import {
   Eye,
   FileText,
   GitBranch,
+  Lightbulb,
   Layers,
   Leaf,
   Move,
@@ -36,6 +37,7 @@ import {
   getDecorationVariantsForBiotope,
   getDefaultDecorationVariant,
   getHabitatZoneGuidance,
+  getEquipmentZoneSources,
   getPlantBiotopeStatus,
   isStoredProject,
   measureDecorationPlacement,
@@ -148,7 +150,13 @@ function DecorationIcon({ kind, size }: { kind: DecorationKind; size: number }) 
   if (kind === "Branche") return <GitBranch size={size} />;
   if (kind === "Plateforme") return <Layers size={size} />;
   if (kind === "Gamelle") return <Waves size={size} />;
+  if (kind === "Lampe chauffante") return <Sun size={size} />;
+  if (kind === "Tube UVB") return <Lightbulb size={size} />;
   return <span className="rock-icon" />;
+}
+
+function decorationKindClass(kind: DecorationKind) {
+  return kind.toLowerCase().replace(/\s+/g, "-");
 }
 
 function getPlantProfile(id: string | undefined) {
@@ -347,6 +355,7 @@ function App() {
     const floorY = 0.12;
     const colors = biotopeColors[biotope];
     const zoneIsDocumented = (key: HabitatZoneKey) => habitatZoneGuidance.find((zone) => zone.key === key)?.status === "documented";
+    const equipmentZoneSources = getEquipmentZoneSources(decorations);
     const glass = new THREE.MeshPhysicalMaterial({
       color: 0xd9e6d9,
       transparent: true,
@@ -546,6 +555,49 @@ function App() {
         scene.add(bowl);
         decorationObjects.push(bowl);
         decorationObjectsById.set(item.id, bowl);
+      } else if (item.kind === "Lampe chauffante") {
+        const lamp = new THREE.Group();
+        lamp.userData.decorationId = item.id;
+        const shade = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.13, 0.26, 0.22, 16, 1, true),
+          new THREE.MeshStandardMaterial({ color: 0x555d57, metalness: 0.35, roughness: 0.55, side: THREE.DoubleSide }),
+        );
+        shade.position.y = -0.08;
+        lamp.add(shade);
+        const bulb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.1, 12, 8),
+          new THREE.MeshStandardMaterial({ color: 0xe9a85d, emissive: 0xe58a3d, emissiveIntensity: 0.65, roughness: 0.35 }),
+        );
+        bulb.position.y = -0.22;
+        lamp.add(bulb);
+        const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.18, 8), frameMaterial);
+        cable.position.y = 0.1;
+        lamp.add(cable);
+        lamp.scale.setScalar(sizeScale);
+        lamp.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        lamp.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(lamp);
+        decorationObjects.push(lamp);
+        decorationObjectsById.set(item.id, lamp);
+      } else if (item.kind === "Tube UVB") {
+        const tube = new THREE.Group();
+        tube.userData.decorationId = item.id;
+        const lightTube = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.035, 0.035, 0.95, 10),
+          new THREE.MeshStandardMaterial({ color: 0xdde8cd, emissive: 0x87a9ad, emissiveIntensity: 0.4, roughness: 0.32 }),
+        );
+        lightTube.rotation.z = Math.PI / 2;
+        lightTube.position.y = -0.05;
+        tube.add(lightTube);
+        const mount = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.07, 0.1), frameMaterial);
+        mount.position.y = 0.04;
+        tube.add(mount);
+        tube.scale.setScalar(sizeScale);
+        tube.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
+        tube.position.set(x, floorY + 0.1 + verticalOffset, z);
+        scene.add(tube);
+        decorationObjects.push(tube);
+        decorationObjectsById.set(item.id, tube);
       } else {
         const isPebble = variant === "Galet";
         const rock = new THREE.Mesh(
@@ -588,19 +640,28 @@ function App() {
     scene.add(planGrid);
 
     if (showHabitatZones) {
-      const addFloorZone = (key: HabitatZoneKey, x: number, z: number, radiusX: number, radiusZ: number, color: number) => {
+      const addFloorZone = (key: HabitatZoneKey, x: number, z: number, radiusX: number, radiusZ: number, color: number, rotation = 0) => {
         const zone = new THREE.Mesh(
           new THREE.CircleGeometry(1, 48),
           new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.2, depthWrite: false }),
         );
-        zone.rotation.x = -Math.PI / 2;
+        zone.rotation.set(-Math.PI / 2, THREE.MathUtils.degToRad(rotation), 0);
         zone.position.set(x, floorY + 0.112 + (key === "uv" ? 0.002 : 0), z);
         zone.scale.set(radiusX, radiusZ, 1);
         scene.add(zone);
       };
-      if (zoneIsDocumented("hot")) addFloorZone("hot", -width * 0.24, 0, width * 0.24, depth * 0.38, 0xc47a53);
-      if (zoneIsDocumented("cool")) addFloorZone("cool", width * 0.24, 0, width * 0.24, depth * 0.38, 0x6d9fac);
-      if (zoneIsDocumented("uv")) addFloorZone("uv", -width * 0.24, -depth * 0.14, width * 0.12, depth * 0.2, 0xc4a64e);
+      if (zoneIsDocumented("hot")) equipmentZoneSources.heat.forEach((source) => {
+        addFloorZone("hot", source.x * widthHalf, source.z * depthHalf, width * 0.17, depth * 0.22, 0xc47a53, source.rotation);
+      });
+      if (zoneIsDocumented("cool") && equipmentZoneSources.heat.length > 0) {
+        const heatX = equipmentZoneSources.heat.reduce((sum, source) => sum + source.x, 0) / equipmentZoneSources.heat.length;
+        const heatZ = equipmentZoneSources.heat.reduce((sum, source) => sum + source.z, 0) / equipmentZoneSources.heat.length;
+        const coolX = Math.abs(heatX) < 0.18 ? 0.58 : -heatX;
+        addFloorZone("cool", coolX * widthHalf, -heatZ * depthHalf, width * 0.2, depth * 0.3, 0x6d9fac);
+      }
+      if (zoneIsDocumented("uv")) equipmentZoneSources.uv.forEach((source) => {
+        addFloorZone("uv", source.x * widthHalf, source.z * depthHalf, width * 0.23, depth * 0.16, 0xc4a64e, source.rotation);
+      });
       if (zoneIsDocumented("retreat")) {
         decorations.filter((item) => item.kind === "Cachette").forEach((item) => {
           addFloorZone("retreat", item.position.x * widthHalf, item.position.z * depthHalf, 0.28, 0.24, 0x75837d);
@@ -795,7 +856,8 @@ function App() {
     setDecorations((current) => {
       const column = current.length % 3;
       const row = Math.floor(current.length / 3);
-      const position = { x: (column - 1) * 0.5, z: row % 2 === 0 ? -0.45 : 0.45 };
+      const position: Decoration["position"] = { x: (column - 1) * 0.5, z: row % 2 === 0 ? -0.45 : 0.45 };
+      if (kind === "Lampe chauffante" || kind === "Tube UVB") position.y = 0.92;
       return [...current, { id: nextId, kind, variant: getDefaultDecorationVariant(kind, biotope), position }];
     });
     setNextId((current) => current + 1);
@@ -1109,9 +1171,10 @@ function App() {
     unknown: "Non documenté",
   };
   const positionedDecorations = measureDecorationPlacement(decorations, dimensions);
-  const decorationCounts = (["Plante", "Cachette", "Roche", "Branche", "Plateforme", "Gamelle"] as const)
+  const decorationCounts = (["Plante", "Cachette", "Roche", "Branche", "Plateforme", "Gamelle", "Lampe chauffante", "Tube UVB"] as const)
     .map((kind) => ({ kind, count: decorations.filter((item) => item.kind === kind).length }))
     .filter((item) => item.count > 0);
+  const equipmentZoneSources = getEquipmentZoneSources(decorations);
   const plantCatalogOptions = [...plantCatalog].sort((first, second) => {
     const priority = { recommended: 0, unknown: 1, "not-recommended": 2 };
     return priority[getPlantBiotopeStatus(first, biotope)] - priority[getPlantBiotopeStatus(second, biotope)];
@@ -1212,6 +1275,8 @@ function App() {
               <button type="button" onClick={() => addDecoration("Branche")}><Plus size={14} /><GitBranch size={14} /> Branche</button>
               <button type="button" onClick={() => addDecoration("Plateforme")}><Plus size={14} /><Layers size={14} /> Plate-forme</button>
               <button type="button" onClick={() => addDecoration("Gamelle")}><Plus size={14} /><Waves size={14} /> Gamelle</button>
+              <button type="button" onClick={() => addDecoration("Lampe chauffante")}><Plus size={14} /><Sun size={14} /> Lampe</button>
+              <button type="button" onClick={() => addDecoration("Tube UVB")}><Plus size={14} /><Lightbulb size={14} /> Tube UVB</button>
             </div>
             <p className="decor-variant-note">Variantes visuelles uniquement; vérifiez la compatibilité des matériaux avec l’espèce.</p>
             <div className="decor-list">
@@ -1222,7 +1287,7 @@ function App() {
                 const plantProfile = item.kind === "Plante" ? getPlantProfile(item.plantSpeciesId) : undefined;
                 const plantBiotopeStatus = plantProfile ? getPlantBiotopeStatus(plantProfile, biotope) : undefined;
                 return <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
-                  <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}><DecorationIcon kind={item.kind} size={14} /></span>
+                  <span className={`decor-swatch swatch-${decorationKindClass(item.kind)}`}><DecorationIcon kind={item.kind} size={14} /></span>
                   <div className="decor-editor">
                     <div className="decor-item-heading"><span>{item.kind} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">Paroi proche {item.nearestWallCm} cm</small></div>
                     {selectedDecorationId === item.id && viewMode === "3d" && <div className="transform-tools" role="group" aria-label={`Outils pour ${item.kind}`}>
@@ -1299,7 +1364,11 @@ function App() {
               <p>Repères sourcés · {selectedSpecies.source?.publisher ?? "aucune source"}</p>
               {habitatZoneGuidance.map((zone) => {
                 const rangeText = zone.range ? `${zone.range[0]}–${zone.range[1]} ${zone.key === "uv" ? "UVI" : "°C"}` : zone.status === "documented" ? "Requis" : zone.status === "not-required" ? "Non requis" : "Non documenté";
-                return <div className={`habitat-zone-row ${zone.key} ${zone.status}`} key={zone.key}><i /><span>{habitatZoneLabels[zone.key]}</span><strong>{rangeText}</strong></div>;
+                const equipmentNote = zone.status !== "documented" ? "" : zone.key === "hot" || zone.key === "cool"
+                  ? equipmentZoneSources.heat.length > 0 ? "Lampe en place" : "Ajouter une lampe chauffante"
+                  : zone.key === "uv" ? equipmentZoneSources.uv.length > 0 ? "Tube en place" : "Ajouter un tube UVB"
+                    : "Zones basées sur les cachettes";
+                return <div className={`habitat-zone-row ${zone.key} ${zone.status}`} key={zone.key}><i /><span>{habitatZoneLabels[zone.key]}</span><strong>{rangeText}{equipmentNote && <small>{equipmentNote}</small>}</strong></div>;
               })}
               <small>Repères visuels indicatifs; ils ne simulent ni température, ni UV, ni ombres réelles.</small>
             </div>}
@@ -1356,13 +1425,13 @@ function App() {
               <h3>Plan coté</h3>
               <div className="report-plan-dimensions"><span>Largeur intérieure <strong>{dimensions.width} cm</strong></span><span>Profondeur intérieure <strong>{dimensions.depth} cm</strong></span></div>
               <div className="report-plan-frame" role="img" aria-label={`Plan du terrarium de ${dimensions.width} par ${dimensions.depth} centimètres avec le décor placé`} style={{ aspectRatio: `${Math.max(1, dimensions.width)} / ${Math.max(1, dimensions.depth)}`, backgroundSize: `${Math.min(100, 1000 / Math.max(10, dimensions.width))}% ${Math.min(100, 1000 / Math.max(10, dimensions.depth))}%` }}>
-                {positionedDecorations.map((item) => { const markerSize = 16 + (item.size ?? 100) * 0.08; return <span key={item.id} className={`report-plan-marker marker-${item.kind.toLowerCase()}`} style={{ left: `${Math.min(97, Math.max(3, (item.position.x + 1) * 50))}%`, top: `${Math.min(97, Math.max(3, (item.position.z + 1) * 50))}%`, width: markerSize, height: markerSize }} title={`${item.kind} · X ${item.xCm} cm · Z ${item.zCm} cm · ${item.size ?? 100}%`} aria-label={`${item.kind}, X ${item.xCm} cm, Z ${item.zCm} cm, taille ${item.size ?? 100}%`}><DecorationIcon kind={item.kind} size={13} /></span>; })}
+                {positionedDecorations.map((item) => { const markerSize = 16 + (item.size ?? 100) * 0.08; return <span key={item.id} className={`report-plan-marker marker-${decorationKindClass(item.kind)}`} style={{ left: `${Math.min(97, Math.max(3, (item.position.x + 1) * 50))}%`, top: `${Math.min(97, Math.max(3, (item.position.z + 1) * 50))}%`, width: markerSize, height: markerSize }} title={`${item.kind} · X ${item.xCm} cm · Z ${item.zCm} cm · ${item.size ?? 100}%`} aria-label={`${item.kind}, X ${item.xCm} cm, Z ${item.zCm} cm, taille ${item.size ?? 100}%`}><DecorationIcon kind={item.kind} size={13} /></span>; })}
               </div>
-              <div className="report-plan-legend"><span><i className="legend-dot plant-dot" /> Plante</span><span><i className="legend-dot hide-dot" /> Cachette</span><span><i className="legend-dot rock-dot" /> Roche</span><span><i className="legend-dot branch-dot" /> Branche</span><span><i className="legend-dot platform-dot" /> Plate-forme</span><span><i className="legend-dot bowl-dot" /> Gamelle</span></div>
+              <div className="report-plan-legend"><span><i className="legend-dot plant-dot" /> Plante</span><span><i className="legend-dot hide-dot" /> Cachette</span><span><i className="legend-dot rock-dot" /> Roche</span><span><i className="legend-dot branch-dot" /> Branche</span><span><i className="legend-dot platform-dot" /> Plate-forme</span><span><i className="legend-dot bowl-dot" /> Gamelle</span><span><i className="legend-dot heat-dot" /> Lampe</span><span><i className="legend-dot uvb-dot" /> Tube UVB</span></div>
               <h4>Décor à prévoir</h4>
               {decorationCounts.length === 0 ? <p className="report-no-decor">Aucun élément de décor placé.</p> : <>
                 <div className="report-material-counts">{decorationCounts.map((item) => <span key={item.kind}>{item.kind} <strong>× {item.count}</strong></span>)}</div>
-                <ul className="report-material-list">{positionedDecorations.map((item, index) => { const plantProfile = getPlantProfile(item.plantSpeciesId); return <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}><DecorationIcon kind={item.kind} size={13} /></span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)}{plantProfile ? ` · ${plantProfile.scientificName}` : ""}</strong><small>X {item.xCm} cm depuis la gauche · Y {item.yCm} cm au-dessus du fond · Z {item.zCm} cm depuis le haut · rotation Y {item.rotation ?? 0}° · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm{plantProfile ? " · compatibilité reptile non documentée" : ""}</small>{plantProfile && <a className="plant-report-source" href={plantProfile.source.url} target="_blank" rel="noreferrer">Source · {plantProfile.source.publisher}</a>}</span></li>; })}</ul>
+                <ul className="report-material-list">{positionedDecorations.map((item, index) => { const plantProfile = getPlantProfile(item.plantSpeciesId); return <li key={item.id}><span className={`decor-swatch swatch-${decorationKindClass(item.kind)}`}><DecorationIcon kind={item.kind} size={13} /></span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)}{plantProfile ? ` · ${plantProfile.scientificName}` : ""}</strong><small>X {item.xCm} cm depuis la gauche · Y {item.yCm} cm au-dessus du fond · Z {item.zCm} cm depuis le haut · rotation Y {item.rotation ?? 0}° · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm{plantProfile ? " · compatibilité reptile non documentée" : ""}</small>{plantProfile && <a className="plant-report-source" href={plantProfile.source.url} target="_blank" rel="noreferrer">Source · {plantProfile.source.publisher}</a>}</span></li>; })}</ul>
               </>}
             </section>
             <h3>Critères et relevés</h3>

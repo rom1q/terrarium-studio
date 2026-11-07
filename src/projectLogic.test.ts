@@ -4,6 +4,7 @@ import {
   defaultDecorationVariant,
   decorationVariants,
   duplicateDecoration,
+  getEquipmentZoneSources,
   getBiotopeGuidance,
   getHabitatZoneGuidance,
   getPlantBiotopeStatus,
@@ -244,9 +245,11 @@ describe("dimensioned plan placement", () => {
     const branch = { id: 6, kind: "Branche" as const, position: { x: 0, z: 0 } };
     const platform = { id: 7, kind: "Plateforme" as const, position: { x: 0, z: 0 } };
     const bowl = { id: 8, kind: "Gamelle" as const, position: { x: 0, z: 0 } };
-    const decorations = [plant, rock, hide, branch, platform, bowl];
+    const lamp = { id: 9, kind: "Lampe chauffante" as const, position: { x: 0, y: 1, z: 0 } };
+    const uvb = { id: 10, kind: "Tube UVB" as const, position: { x: 0, y: 1, z: 0 } };
+    const decorations = [plant, rock, hide, branch, platform, bowl, lamp, uvb];
 
-    expect(defaultDecorationVariant).toEqual({ Plante: "Feuillage dense", Roche: "Roche anguleuse", Cachette: "Grotte", Branche: "Branche fourchue", Plateforme: "Plateforme en bois", Gamelle: "Gamelle d’eau" });
+    expect(defaultDecorationVariant).toEqual({ Plante: "Feuillage dense", Roche: "Roche anguleuse", Cachette: "Grotte", Branche: "Branche fourchue", Plateforme: "Plateforme en bois", Gamelle: "Gamelle d’eau", "Lampe chauffante": "Spot chauffant", "Tube UVB": "Tube UVB" });
     expect(decorationVariants.Plante).toContain("Fougère");
     expect(updateDecorationVariant(decorations, plant.id, "Fougère")[0].variant).toBe("Fougère");
     expect(updateDecorationVariant(decorations, rock.id, "Galet")[1].variant).toBe("Galet");
@@ -254,6 +257,8 @@ describe("dimensioned plan placement", () => {
     expect(updateDecorationVariant(decorations, branch.id, "Branche droite")[3].variant).toBe("Branche droite");
     expect(updateDecorationVariant(decorations, platform.id, "Plateau en liège")[4].variant).toBe("Plateau en liège");
     expect(updateDecorationVariant(decorations, bowl.id, "Coupelle sèche")[5].variant).toBe("Coupelle sèche");
+    expect(updateDecorationVariant(decorations, lamp.id, "Spot chauffant")[6].variant).toBe("Spot chauffant");
+    expect(updateDecorationVariant(decorations, uvb.id, "Tube UVB")[7].variant).toBe("Tube UVB");
     expect(updateDecorationVariant(decorations, plant.id, "Grotte")).toBe(decorations);
   });
 
@@ -270,6 +275,19 @@ describe("dimensioned plan placement", () => {
     };
 
     expect(parseProjectExport({ ...projectExport, project: catalogProject }, speciesLabels)?.decorations).toEqual(catalogProject.decorations);
+  });
+
+  it("accepts heating and UVB equipment in saved projects", () => {
+    const equipmentProject = {
+      ...project,
+      decorations: [
+        { id: 3, kind: "Lampe chauffante", variant: "Spot chauffant", position: { x: -0.5, y: 0.92, z: -0.4 } },
+        { id: 4, kind: "Tube UVB", variant: "Tube UVB", position: { x: 0, y: 0.94, z: -0.3 }, rotation: 90 },
+      ],
+      nextId: 5,
+    };
+
+    expect(parseProjectExport({ ...projectExport, project: equipmentProject }, speciesLabels)?.decorations).toEqual(equipmentProject.decorations);
   });
 
   it("suggests different plant styles by biotope without changing non-plant variants", () => {
@@ -364,5 +382,21 @@ describe("botanical plant catalog", () => {
     expect(assigned[0]).toMatchObject({ plantSpeciesId: "echeveria-elegans", variant: "Rosette" });
     expect(setDecorationPlantSpecies([decoration], decoration.id, "unknown-plant")).toEqual([decoration]);
     expect(setDecorationPlantSpecies([decoration], decoration.id, undefined)[0]).toEqual(decoration);
+  });
+});
+
+describe("equipment zone sources", () => {
+  it("maps thermal and UV zones to their matching equipment", () => {
+    const equipment = [
+      { id: 10, kind: "Lampe chauffante" as const, position: { x: -0.4, y: 0.9, z: -0.2 } },
+      { id: 11, kind: "Tube UVB" as const, position: { x: 0.3, y: 0.95, z: 0.1 }, rotation: 30 },
+      { id: 12, kind: "Branche" as const, position: { x: 0, z: 0 } },
+    ];
+
+    expect(getEquipmentZoneSources(equipment)).toEqual({
+      heat: [{ id: 10, x: -0.4, z: -0.2, rotation: 0 }],
+      uv: [{ id: 11, x: 0.3, z: 0.1, rotation: 30 }],
+    });
+    expect(getEquipmentZoneSources([equipment[2]])).toEqual({ heat: [], uv: [] });
   });
 });

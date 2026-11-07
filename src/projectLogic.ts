@@ -10,6 +10,8 @@ export const decorationVariants = {
   Branche: ["Branche droite", "Branche fourchue"],
   Plateforme: ["Plateforme en bois", "Plateau en liège"],
   Gamelle: ["Gamelle d’eau", "Coupelle sèche"],
+  "Lampe chauffante": ["Spot chauffant"],
+  "Tube UVB": ["Tube UVB"],
 } as const;
 export type DecorationKind = keyof typeof decorationVariants;
 export type DecorationVariant = (typeof decorationVariants)[DecorationKind][number];
@@ -59,6 +61,8 @@ export const defaultDecorationVariant: Record<DecorationKind, DecorationVariant>
   Branche: "Branche fourchue",
   Plateforme: "Plateforme en bois",
   Gamelle: "Gamelle d’eau",
+  "Lampe chauffante": "Spot chauffant",
+  "Tube UVB": "Tube UVB",
 };
 export const plantStylesByBiotope: Record<Biotope, readonly Extract<DecorationVariant, "Feuillage dense" | "Fougère" | "Rosette">[]> = {
   Désertique: ["Rosette"],
@@ -171,6 +175,13 @@ export function setDecorationPlantSpecies(decorations: Decoration[], id: number,
   });
 }
 
+export function getEquipmentZoneSources(decorations: Decoration[]) {
+  const positions = (kind: "Lampe chauffante" | "Tube UVB") => decorations
+    .filter((item) => item.kind === kind)
+    .map((item) => ({ id: item.id, x: item.position.x, z: item.position.z, rotation: item.rotation ?? 0 }));
+  return { heat: positions("Lampe chauffante"), uv: positions("Tube UVB") };
+}
+
 export function measureDecorationPlacement(
   decorations: Decoration[],
   dimensions: { width: number; depth: number; height: number },
@@ -247,7 +258,7 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
     if (typeof item !== "object" || item === null) return false;
     const decoration = item as Record<string, unknown>;
     const position = decoration.position;
-    const isValidKind = ["Plante", "Cachette", "Roche", "Branche", "Plateforme", "Gamelle"].includes(decoration.kind as string);
+    const isValidKind = ["Plante", "Cachette", "Roche", "Branche", "Plateforme", "Gamelle", "Lampe chauffante", "Tube UVB"].includes(decoration.kind as string);
     const allowedVariants: readonly string[] = isValidKind ? decorationVariants[decoration.kind as DecorationKind] : [];
     const isValidVariant = decoration.variant === undefined || (typeof decoration.variant === "string" && allowedVariants.includes(decoration.variant));
     const isValidPlantSpecies = decoration.plantSpeciesId === undefined || (decoration.kind === "Plante" && typeof decoration.plantSpeciesId === "string" && plantCatalog.some((plant) => plant.id === decoration.plantSpeciesId));
