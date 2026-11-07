@@ -76,7 +76,7 @@ const habitatZoneLabels: Record<HabitatZoneKey, string> = {
 
 const createDefaultDecorations = (): Decoration[] => [
   { id: 1, kind: "Plante", position: { x: -0.62, z: -0.42 } },
-  { id: 2, kind: "Roche", position: { x: -0.5, z: 0.55 } },
+  { id: 2, kind: "Roche", position: { x: -0.5, z: 0.55 }, size: 70 },
   { id: 3, kind: "Cachette", position: { x: 0.38, z: -0.42 } },
 ];
 

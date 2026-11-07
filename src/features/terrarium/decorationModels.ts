@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { rockGeometryProfiles } from "../../domain/decorationGeometry";
 import type { DecorationVariant } from "../../domain/projectLogic";
 
 type RockVariant = Extract<DecorationVariant, "Roche anguleuse" | "Galet" | "Stratifiée">;
@@ -39,23 +40,18 @@ export function createRockModel(variant: RockVariant, seed = 0): THREE.Group {
   const rock = new THREE.Group();
 
   if (variant === "Galet") {
+    const profile = rockGeometryProfiles.pebble;
     const pebble = new THREE.Mesh(
-      new THREE.SphereGeometry(0.32, 24, 16),
+      new THREE.SphereGeometry(profile.radius, 24, 16),
       new THREE.MeshStandardMaterial({ color: seed % 2 ? 0xaaa18f : 0x918b80, roughness: 0.72 }),
     );
-    pebble.scale.set(1.25, 0.72, 0.95);
+    pebble.scale.set(profile.scale[0], profile.scale[1], profile.scale[2]);
     rock.add(pebble);
     return rock;
   }
 
   if (variant === "Stratifiée") {
-    const layers = [
-      { color: 0x655f57, y: -0.1, height: 0.12, topRadius: 0.28, bottomRadius: 0.37 },
-      { color: 0xc3b79f, y: 0, height: 0.075, topRadius: 0.39, bottomRadius: 0.3 },
-      { color: 0x91877a, y: 0.09, height: 0.095, topRadius: 0.27, bottomRadius: 0.35 },
-    ] as const;
-
-    layers.forEach((layer, index) => {
+    rockGeometryProfiles.stratified.layers.forEach((layer, index) => {
       const mesh = new THREE.Mesh(
         new THREE.CylinderGeometry(layer.topRadius, layer.bottomRadius, layer.height, 12),
         new THREE.MeshStandardMaterial({
@@ -71,12 +67,13 @@ export function createRockModel(variant: RockVariant, seed = 0): THREE.Group {
     return rock;
   }
 
+  const profile = rockGeometryProfiles.angular;
   const baseColor = seed % 2 ? 0x80796d : 0x978875;
   const body = new THREE.Mesh(
     createFacetedGeometry(seed, baseColor),
     new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.98, flatShading: true }),
   );
-  body.scale.set(1.2, 0.82, 0.95);
+  body.scale.set(profile.scale[0], profile.scale[1], profile.scale[2]);
   body.rotation.y = seed % 3 * 0.22;
   rock.add(body);
   return rock;

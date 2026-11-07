@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { plantGeometryProfiles } from "../../domain/decorationGeometry";
 import type { DecorationVariant, PlantVisualProfile } from "../../domain/projectLogic";
 
 const fallbackProfiles: Record<"Feuillage dense" | "Fougère" | "Rosette", PlantVisualProfile> = {
@@ -191,6 +192,21 @@ export function createPlantModel(
     }
   }
 
-  plant.scale.set(profile.spreadScale, profile.heightScale, profile.spreadScale);
+  const geometryBounds = plantGeometryProfiles[profile.silhouette].bounds;
+  const actualBounds = new THREE.Box3().setFromObject(plant);
+  const center = actualBounds.getCenter(new THREE.Vector3());
+  const size = actualBounds.getSize(new THREE.Vector3());
+  plant.children.forEach((child) => {
+    child.position.x -= center.x;
+    child.position.y -= actualBounds.min.y;
+    child.position.z -= center.z;
+  });
+  const halfWidth = Math.max(Math.abs(actualBounds.min.x - center.x), Math.abs(actualBounds.max.x - center.x));
+  const halfDepth = Math.max(Math.abs(actualBounds.min.z - center.z), Math.abs(actualBounds.max.z - center.z));
+  plant.scale.set(
+    geometryBounds.halfWidth / halfWidth * profile.spreadScale,
+    geometryBounds.maxY / size.y * profile.heightScale,
+    geometryBounds.halfDepth / halfDepth * profile.spreadScale,
+  );
   return plant;
 }

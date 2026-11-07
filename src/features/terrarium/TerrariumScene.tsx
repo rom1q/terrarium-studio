@@ -9,6 +9,7 @@ import { createPlantModel } from "./plantModels";
 import { createRockModel } from "./decorationModels";
 import { createHideModel } from "./hideModels";
 import { getTerrariumSceneDimensions, type LayoutWarning } from "../../domain/layoutValidation";
+import { getDecorationGeometryProfile, otherDecorationGeometryProfiles } from "../../domain/decorationGeometry";
 
 type TerrariumSceneProps = {
   shape: Shape;
@@ -159,12 +160,13 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       const sizeScale = (item.size ?? 100) / 100;
       const plantProfile = item.kind === "Plante" ? getPlantProfile(item.plantSpeciesId) : undefined;
       const variant = item.variant ?? plantProfile?.visualVariant ?? getDefaultDecorationVariant(item.kind, biotope);
+      const geometryProfile = getDecorationGeometryProfile(item, biotope);
       if (item.kind === "Plante") {
         const plant = createPlantModel(plantProfile?.visual, variant, colors.plant);
         plant.userData.decorationId = item.id;
         plant.scale.multiplyScalar(sizeScale);
         plant.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
-        plant.position.set(x, floorY + 0.1 + verticalOffset, z);
+        plant.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
         scene.add(plant);
         decorationObjects.push(plant);
         decorationObjectsById.set(item.id, plant);
@@ -173,13 +175,14 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         hide.userData.decorationId = item.id;
         hide.scale.setScalar(sizeScale);
         hide.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
-        hide.position.set(x, floorY + 0.1 + verticalOffset, z);
+        hide.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
         scene.add(hide);
         decorationObjects.push(hide);
         decorationObjectsById.set(item.id, hide);
       } else if (item.kind === "Branche") {
         const branch = new THREE.Group();
         branch.userData.decorationId = item.id;
+        const branchProfile = otherDecorationGeometryProfiles.branch[variant === "Branche droite" ? "straight" : "forked"];
         const wood = new THREE.MeshStandardMaterial({ color: variant === "Branche droite" ? 0x805f42 : 0x705238, roughness: 0.94 });
         const addSegment = (start: THREE.Vector3, end: THREE.Vector3, radius: number) => {
           const direction = new THREE.Vector3().subVectors(end, start);
@@ -188,105 +191,109 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
           segment.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
           branch.add(segment);
         };
-        addSegment(new THREE.Vector3(-0.48, 0.16, 0), new THREE.Vector3(0.48, 0.78, 0), 0.075);
-        if (variant === "Branche fourchue") {
-          addSegment(new THREE.Vector3(0.06, 0.48, 0), new THREE.Vector3(-0.2, 0.9, 0.18), 0.045);
-          addSegment(new THREE.Vector3(0.23, 0.59, 0), new THREE.Vector3(0.38, 0.98, -0.16), 0.04);
-        }
+        branchProfile.segments.forEach((segment) => addSegment(
+          new THREE.Vector3(segment.start[0], segment.start[1], segment.start[2]),
+          new THREE.Vector3(segment.end[0], segment.end[1], segment.end[2]),
+          segment.radius,
+        ));
         branch.scale.setScalar(sizeScale);
         branch.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
-        branch.position.set(x, floorY + 0.1 + verticalOffset, z);
+        branch.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
         scene.add(branch);
         decorationObjects.push(branch);
         decorationObjectsById.set(item.id, branch);
       } else if (item.kind === "Plateforme") {
         const platform = new THREE.Group();
         platform.userData.decorationId = item.id;
+        const platformProfile = otherDecorationGeometryProfiles.platform;
         const material = new THREE.MeshStandardMaterial({ color: variant === "Plateau en liège" ? 0x9a7855 : 0x806344, roughness: 0.92 });
-        const slab = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.1, 0.62), material);
-        slab.position.y = 0.48;
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(platformProfile.slab.width, platformProfile.slab.height, platformProfile.slab.depth), material);
+        slab.position.y = platformProfile.slab.y;
         platform.add(slab);
-        for (const supportX of [-0.36, 0.36]) {
-          for (const supportZ of [-0.22, 0.22]) {
-            const support = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), material);
-            support.position.set(supportX, 0.22, supportZ);
+        for (const supportX of platformProfile.support.x) {
+          for (const supportZ of platformProfile.support.z) {
+            const support = new THREE.Mesh(new THREE.BoxGeometry(platformProfile.support.width, platformProfile.support.height, platformProfile.support.depth), material);
+            support.position.set(supportX, platformProfile.support.y, supportZ);
             platform.add(support);
           }
         }
         platform.scale.setScalar(sizeScale);
         platform.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
-        platform.position.set(x, floorY + 0.1 + verticalOffset, z);
+        platform.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
         scene.add(platform);
         decorationObjects.push(platform);
         decorationObjectsById.set(item.id, platform);
       } else if (item.kind === "Gamelle") {
         const bowl = new THREE.Group();
         bowl.userData.decorationId = item.id;
+        const bowlProfile = otherDecorationGeometryProfiles.bowl;
         const ceramic = new THREE.MeshStandardMaterial({ color: 0x8b8b79, roughness: 0.48 });
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.21, 0.15, 20, 1, true), ceramic);
-        body.position.y = 0.075;
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(bowlProfile.body.topRadius, bowlProfile.body.bottomRadius, bowlProfile.body.height, 20, 1, true), ceramic);
+        body.position.y = bowlProfile.body.y;
         bowl.add(body);
-        const bottom = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 20), ceramic);
-        bottom.position.y = 0.02;
+        const bottom = new THREE.Mesh(new THREE.CylinderGeometry(bowlProfile.bottom.radius, bowlProfile.bottom.radius, bowlProfile.bottom.height, 20), ceramic);
+        bottom.position.y = bowlProfile.bottom.y;
         bowl.add(bottom);
-        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.022, 6, 24), ceramic);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(bowlProfile.rim.radius, bowlProfile.rim.tube, 6, 24), ceramic);
         rim.rotation.x = Math.PI / 2;
-        rim.position.y = 0.145;
+        rim.position.y = bowlProfile.rim.y;
         bowl.add(rim);
         if (variant === "Gamelle d’eau") {
           const water = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.18, 0.18, 0.012, 20),
+            new THREE.CylinderGeometry(bowlProfile.water.radius, bowlProfile.water.radius, bowlProfile.water.height, 20),
             new THREE.MeshPhysicalMaterial({ color: colors.water, roughness: 0.2, metalness: 0.08 }),
           );
-          water.position.y = 0.075;
+          water.position.y = bowlProfile.water.y;
           bowl.add(water);
         }
         bowl.scale.setScalar(sizeScale);
         bowl.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
-        bowl.position.set(x, floorY + 0.1 + verticalOffset, z);
+        bowl.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
         scene.add(bowl);
         decorationObjects.push(bowl);
         decorationObjectsById.set(item.id, bowl);
       } else if (item.kind === "Lampe chauffante") {
         const lamp = new THREE.Group();
         lamp.userData.decorationId = item.id;
+        const lampProfile = otherDecorationGeometryProfiles.heater;
         const shade = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.13, 0.26, 0.22, 16, 1, true),
+          new THREE.CylinderGeometry(lampProfile.shade.topRadius, lampProfile.shade.bottomRadius, lampProfile.shade.height, 16, 1, true),
           new THREE.MeshStandardMaterial({ color: 0x555d57, metalness: 0.35, roughness: 0.55, side: THREE.DoubleSide }),
         );
-        shade.position.y = -0.08;
+        shade.position.y = lampProfile.shade.y;
         lamp.add(shade);
         const bulb = new THREE.Mesh(
-          new THREE.SphereGeometry(0.1, 12, 8),
+          new THREE.SphereGeometry(lampProfile.bulb.radius, 12, 8),
           new THREE.MeshStandardMaterial({ color: 0xe9a85d, emissive: 0xe58a3d, emissiveIntensity: 0.65, roughness: 0.35 }),
         );
-        bulb.position.y = -0.22;
+        bulb.position.y = lampProfile.bulb.y;
         lamp.add(bulb);
-        const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.18, 8), frameMaterial);
-        cable.position.y = 0.1;
+        const cable = new THREE.Mesh(new THREE.CylinderGeometry(lampProfile.cable.radius, lampProfile.cable.radius, lampProfile.cable.height, 8), frameMaterial);
+        cable.position.y = lampProfile.cable.y;
         lamp.add(cable);
         lamp.scale.setScalar(sizeScale);
         lamp.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
-        lamp.position.set(x, floorY + 0.1 + verticalOffset, z);
+        lamp.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
         scene.add(lamp);
         decorationObjects.push(lamp);
         decorationObjectsById.set(item.id, lamp);
       } else if (item.kind === "Tube UVB") {
         const tube = new THREE.Group();
         tube.userData.decorationId = item.id;
+        const tubeProfile = otherDecorationGeometryProfiles.uvb;
         const lightTube = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.035, 0.035, 0.95, 10),
+          new THREE.CylinderGeometry(tubeProfile.tube.radius, tubeProfile.tube.radius, tubeProfile.tube.length, 10),
           new THREE.MeshStandardMaterial({ color: 0xdde8cd, emissive: 0x87a9ad, emissiveIntensity: 0.4, roughness: 0.32 }),
         );
         lightTube.rotation.z = Math.PI / 2;
-        lightTube.position.y = -0.05;
+        lightTube.position.y = tubeProfile.tube.y;
         tube.add(lightTube);
-        const mount = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.07, 0.1), frameMaterial);
-        mount.position.y = 0.04;
+        const mount = new THREE.Mesh(new THREE.BoxGeometry(tubeProfile.mount.width, tubeProfile.mount.height, tubeProfile.mount.depth), frameMaterial);
+        mount.position.y = tubeProfile.mount.y;
         tube.add(mount);
         tube.scale.setScalar(sizeScale);
         tube.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
-        tube.position.set(x, floorY + 0.1 + verticalOffset, z);
+        tube.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
         scene.add(tube);
         decorationObjects.push(tube);
         decorationObjectsById.set(item.id, tube);
@@ -294,7 +301,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         const rock = createRockModel(variant as "Roche anguleuse" | "Galet" | "Stratifiée", item.id);
         rock.scale.setScalar(sizeScale);
         rock.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
-        rock.position.set(x, floorY + 0.28 + verticalOffset, z);
+        rock.position.set(x, floorY + 0.1 + geometryProfile.rootOffsetY + verticalOffset, z);
         rock.userData.decorationId = item.id;
         scene.add(rock);
         decorationObjects.push(rock);
@@ -396,9 +403,10 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       const id = Number(object.userData.decorationId);
       const decoration = decorations.find((item) => item.id === id);
       if (!decoration) return;
+      const geometryProfile = getDecorationGeometryProfile(decoration, biotope);
       const position = {
         x: THREE.MathUtils.clamp(object.position.x / widthHalf, -1, 1),
-        y: THREE.MathUtils.clamp((object.position.y - floorY - (decoration.kind === "Roche" ? 0.28 : 0.1)) / height, 0, 1),
+        y: THREE.MathUtils.clamp((object.position.y - floorY - 0.1 - geometryProfile.rootOffsetY) / height, 0, 1),
         z: THREE.MathUtils.clamp(object.position.z / depthHalf, -1, 1),
       };
       const degrees = THREE.MathUtils.radToDeg(object.rotation.y);
