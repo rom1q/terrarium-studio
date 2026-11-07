@@ -58,7 +58,8 @@ import { DecorationIcon, DecorationPanel, decorationKindClass } from "../feature
 import { TerrariumScene } from "../features/terrarium/TerrariumScene";
 import { applyDecorationLayoutSuggestion } from "../domain/layoutValidation";
 import type { LayoutSuggestion, LayoutWarning } from "../domain/layoutValidation";
-import { createDecorationHistory, decorationHistoryReducer } from "../domain/decorationHistory";
+import { createProjectHistory, projectHistoryReducer } from "../domain/projectHistory";
+import type { EditableProjectState } from "../domain/projectHistory";
 import {
   clearCurrentProject,
   downloadProjectExport,
@@ -109,32 +110,40 @@ function App() {
   const [projectDialogError, setProjectDialogError] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [draftProjectName, setDraftProjectName] = useState("");
-  const [shape, setShape] = useState<Shape>(initialProject?.shape ?? "Basse");
-  const [biotope, setBiotope] = useState<Biotope>(initialBiotope);
-  const [dimensions, setDimensions] = useState(initialProject?.dimensions ?? { width: 120, depth: 60, height: 80 });
-  const [species, setSpecies] = useState(initialProject?.species ?? speciesList[0].label);
+  const [projectHistory, dispatchProjectHistory] = useReducer(projectHistoryReducer, {
+    shape: initialProject?.shape ?? "Basse",
+    biotope: initialBiotope,
+    dimensions: initialProject?.dimensions ?? { width: 120, depth: 60, height: 80 },
+    species: initialProject?.species ?? speciesList[0].label,
+    lifeStage: initialProject?.lifeStage ?? "adult",
+    measurements: initialProject?.measurements ?? createDefaultMeasurements(),
+    decorations: initialProject?.decorations ?? createDefaultDecorations(),
+    nextId: initialProject?.nextId ?? 4,
+  }, createProjectHistory);
+  const { shape, biotope, dimensions, species, lifeStage, measurements, decorations, nextId } = projectHistory.present;
+  const updateProjectHistory = (update: (current: EditableProjectState) => EditableProjectState, groupKey?: string) => {
+    dispatchProjectHistory({ type: "set", update, ...(groupKey ? { groupKey } : {}) });
+  };
+  const replaceProjectState = (project: EditableProjectState) => dispatchProjectHistory({ type: "replace", project });
+  const finishProjectHistoryGroup = () => dispatchProjectHistory({ type: "finish-group" });
+  const setShape = (value: Shape) => updateProjectHistory((current) => ({ ...current, shape: value }));
+  const setBiotope = (value: Biotope) => updateProjectHistory((current) => ({ ...current, biotope: value }));
+  const setLifeStage = (value: LifeStage) => updateProjectHistory((current) => ({ ...current, lifeStage: value }));
+  const setDecorations: Dispatch<SetStateAction<Decoration[]>> = (update) => updateProjectHistory((current) => ({
+    ...current,
+    decorations: typeof update === "function" ? update(current.decorations) : update,
+  }));
   const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
   const habitatZoneGuidance = getHabitatZoneGuidance(selectedSpecies);
   const [showHabitatZones, setShowHabitatZones] = useState(false);
-  const [lifeStage, setLifeStage] = useState<LifeStage>(initialProject?.lifeStage ?? "adult");
-  const [measurements, setMeasurements] = useState<Measurements>(initialProject?.measurements ?? createDefaultMeasurements());
   const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
   const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
   const selectedDecorationIdRef = useRef<number | null>(null);
   const [activeLayoutWarningId, setActiveLayoutWarningId] = useState<string | null>(null);
   const [previewedLayoutSuggestion, setPreviewedLayoutSuggestion] = useState<LayoutSuggestion | null>(null);
   const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
-  const [decorationHistory, dispatchDecorationHistory] = useReducer(
-    decorationHistoryReducer,
-    initialProject?.decorations ?? createDefaultDecorations(),
-    createDecorationHistory,
-  );
-  const decorations = decorationHistory.present;
-  const setDecorations: Dispatch<SetStateAction<Decoration[]>> = (update) => dispatchDecorationHistory({ type: "set", update });
-  const replaceDecorations = (nextDecorations: Decoration[]) => dispatchDecorationHistory({ type: "replace", decorations: nextDecorations });
-  const canUndoDecorations = decorationHistory.past.length > 0;
-  const canRedoDecorations = decorationHistory.future.length > 0;
-  const [nextId, setNextId] = useState(initialProject?.nextId ?? 4);
+  const canUndoProject = projectHistory.past.length > 0;
+  const canRedoProject = projectHistory.future.length > 0;
   const selectDecoration = (id: number | null) => {
     selectedDecorationIdRef.current = id;
     setSelectedDecorationId(id);
@@ -148,15 +157,16 @@ function App() {
   useEffect(() => {
     const handleHistoryShortcut = (event: KeyboardEvent) => {
       const target = event.target;
-      if (target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select"))) return;
+      const input = target instanceof HTMLInputElement ? target : target instanceof HTMLElement ? target.closest("input") : null;
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest("textarea, select") || (input && input.type !== "number" && input.type !== "range"))) return;
       if (showSaveDialog || showReport || !(event.ctrlKey || event.metaKey)) return;
       const key = event.key.toLowerCase();
       if (key === "z" && event.shiftKey || key === "y") {
         event.preventDefault();
-        dispatchDecorationHistory({ type: "redo" });
+        dispatchProjectHistory({ type: "redo" });
       } else if (key === "z") {
         event.preventDefault();
-        dispatchDecorationHistory({ type: "undo" });
+        dispatchProjectHistory({ type: "undo" });
       }
     };
 
@@ -195,16 +205,15 @@ function App() {
   const updateDimension = (key: keyof typeof dimensions, value: string) => {
     const numericValue = Number(value);
     if (Number.isFinite(numericValue)) {
-      setDimensions((current) => ({ ...current, [key]: numericValue }));
+      updateProjectHistory((current) => ({ ...current, dimensions: { ...current.dimensions, [key]: numericValue } }), `dimension:${key}`);
     }
   };
 
   const updateSpecies = (speciesLabel: string) => {
     const nextSpecies = speciesList.find((item) => item.label === speciesLabel) ?? speciesList[0];
     const nextBiotope = resolveBiotopeSelection(nextSpecies, biotope);
-    setSpecies(speciesLabel);
+    updateProjectHistory((current) => ({ ...current, species: speciesLabel, biotope: nextBiotope }));
     if (nextBiotope !== biotope) {
-      setBiotope(nextBiotope);
       setSaveFeedback(`Biotope adapté : ${nextBiotope}`);
       window.setTimeout(() => setSaveFeedback(""), 2200);
     }
@@ -216,28 +225,31 @@ function App() {
   };
 
   const addDecoration = (kind: Decoration["kind"]) => {
-    setDecorations((current) => {
-      const column = current.length % 3;
-      const row = Math.floor(current.length / 3);
+    updateProjectHistory((current) => {
+      const column = current.decorations.length % 3;
+      const row = Math.floor(current.decorations.length / 3);
       const position: Decoration["position"] = { x: (column - 1) * 0.5, z: row % 2 === 0 ? -0.45 : 0.45 };
       if (kind === "Lampe chauffante" || kind === "Tube UVB") position.y = 0.92;
-      return [...current, { id: nextId, kind, variant: getDefaultDecorationVariant(kind, biotope), position }];
+      return {
+        ...current,
+        decorations: [...current.decorations, { id: current.nextId, kind, variant: getDefaultDecorationVariant(kind, current.biotope), position }],
+        nextId: current.nextId + 1,
+      };
     });
-    setNextId((current) => current + 1);
   };
 
   const updateDecorationPosition = (id: number, axis: DecorationAxis, value: string) => {
     const centimeters = Number(value);
     if (!Number.isFinite(centimeters)) return;
-    setDecorations((current) => positionDecorationAtCm(current, id, axis, centimeters, dimensions));
+    updateProjectHistory((current) => ({ ...current, decorations: positionDecorationAtCm(current.decorations, id, axis, centimeters, current.dimensions) }), `decoration:${id}:${axis}`);
   };
 
   const updateDecorationSize = (id: number, value: string) => {
-    setDecorations((current) => resizeDecoration(current, id, Number(value)));
+    updateProjectHistory((current) => ({ ...current, decorations: resizeDecoration(current.decorations, id, Number(value)) }), `decoration:${id}:size`);
   };
 
   const updateDecorationRotation = (id: number, value: string) => {
-    setDecorations((current) => rotateDecoration(current, id, Number(value)));
+    updateProjectHistory((current) => ({ ...current, decorations: rotateDecoration(current.decorations, id, Number(value)) }), `decoration:${id}:rotation`);
   };
 
   const updateDecorationVariantChoice = (id: number, variant: string) => {
@@ -251,8 +263,11 @@ function App() {
   const duplicateSelectedDecoration = () => {
     const id = selectedDecorationIdRef.current;
     if (id === null || !decorations.some((item) => item.id === id)) return;
-    setDecorations((current) => duplicateDecoration(current, id, nextId));
-    setNextId((current) => current + 1);
+    updateProjectHistory((current) => ({
+      ...current,
+      decorations: duplicateDecoration(current.decorations, id, current.nextId),
+      nextId: current.nextId + 1,
+    }));
     selectDecoration(nextId);
   };
 
@@ -429,14 +444,16 @@ function App() {
     lastSavedProjectRef.current = serializedProject;
     setProjectId(project.id);
     setProjectName(project.name);
-    setShape(project.shape);
-    setBiotope(project.biotope);
-    setDimensions(project.dimensions);
-    setSpecies(project.species);
-    setLifeStage(project.lifeStage ?? "adult");
-    replaceDecorations(project.decorations);
-    setNextId(project.nextId);
-    setMeasurements(project.measurements ?? createDefaultMeasurements());
+    replaceProjectState({
+      shape: project.shape,
+      biotope: project.biotope,
+      dimensions: project.dimensions,
+      species: project.species,
+      lifeStage: project.lifeStage ?? "adult",
+      measurements: project.measurements ?? createDefaultMeasurements(),
+      decorations: project.decorations,
+      nextId: project.nextId,
+    });
     selectDecoration(null);
     setViewMode("3d");
     setSavedProjects(projects);
@@ -452,14 +469,16 @@ function App() {
     lastSavedProjectRef.current = JSON.stringify(project);
     setProjectId(project.id);
     setProjectName(project.name);
-    setShape(project.shape);
-    setBiotope(projectBiotope);
-    setDimensions(project.dimensions);
-    setSpecies(project.species);
-    setLifeStage(project.lifeStage ?? "adult");
-    replaceDecorations(project.decorations);
-    setNextId(project.nextId);
-    setMeasurements(project.measurements ?? createDefaultMeasurements());
+    replaceProjectState({
+      shape: project.shape,
+      biotope: projectBiotope,
+      dimensions: project.dimensions,
+      species: project.species,
+      lifeStage: project.lifeStage ?? "adult",
+      measurements: project.measurements ?? createDefaultMeasurements(),
+      decorations: project.decorations,
+      nextId: project.nextId,
+    });
     selectDecoration(null);
     setSaveStatus("saved");
     setSaveFeedback("");
@@ -475,14 +494,16 @@ function App() {
     setProjectId(null);
     lastSavedProjectRef.current = null;
     setProjectName("Habitat sans titre");
-    setShape("Basse");
-    setBiotope("Désertique");
-    setDimensions({ width: 120, depth: 60, height: 80 });
-    setSpecies(speciesList[0].label);
-    setLifeStage("adult");
-    replaceDecorations(createDefaultDecorations());
-    setNextId(4);
-    setMeasurements(createDefaultMeasurements());
+    replaceProjectState({
+      shape: "Basse",
+      biotope: "Désertique",
+      dimensions: { width: 120, depth: 60, height: 80 },
+      species: speciesList[0].label,
+      lifeStage: "adult",
+      measurements: createDefaultMeasurements(),
+      decorations: createDefaultDecorations(),
+      nextId: 4,
+    });
     selectDecoration(null);
     setViewMode("3d");
     setSaveStatus("idle");
@@ -525,7 +546,7 @@ function App() {
   const updateMeasurement = (key: MeasurementKey, value: string) => {
     const numericValue = value === "" ? null : Number(value);
     if (numericValue === null || Number.isFinite(numericValue)) {
-      setMeasurements((current) => ({ ...current, [key]: numericValue }));
+      updateProjectHistory((current) => ({ ...current, measurements: { ...current.measurements, [key]: numericValue } }), `measurement:${key}`);
     }
   };
 
@@ -586,7 +607,7 @@ function App() {
               {(["width", "depth", "height"] as const).map((key) => (
                 <label className="dimension-field" key={key}>
                   <span>{key === "width" ? "Largeur" : key === "depth" ? "Profondeur" : "Hauteur"}</span>
-                  <input aria-label={key === "width" ? "Largeur en centimètres" : key === "depth" ? "Profondeur en centimètres" : "Hauteur en centimètres"} type="number" min="20" max="300" value={dimensions[key]} onChange={(event) => updateDimension(key, event.target.value)} />
+                  <input aria-label={key === "width" ? "Largeur en centimètres" : key === "depth" ? "Profondeur en centimètres" : "Hauteur en centimètres"} type="number" min="20" max="300" value={dimensions[key]} onChange={(event) => updateDimension(key, event.target.value)} onBlur={finishProjectHistoryGroup} />
                 </label>
               ))}
             </div>
@@ -624,6 +645,7 @@ function App() {
             onUpdateRotation={updateDecorationRotation}
             onUpdateVariant={updateDecorationVariantChoice}
             onUpdatePlantSpecies={updateBotanicalPlant}
+            onFinishNumericEdit={finishProjectHistoryGroup}
           />
 
           <section className="form-section species-section">
@@ -647,10 +669,10 @@ function App() {
             {selectedSpecies.referenceRanges && <div className="measurement-form">
               <p className="field-label">Mesures relevées <small>optionnel</small></p>
               <div className="measurement-grid">
-                <label><span>Zone chaude · °C</span><input aria-label="Température zone chaude en degrés" type="number" step="0.1" value={measurements.hotSideTemperature ?? ""} onChange={(event) => updateMeasurement("hotSideTemperature", event.target.value)} /></label>
-                <label><span>Zone fraîche · °C</span><input aria-label="Température zone fraîche en degrés" type="number" step="0.1" value={measurements.coolSideTemperature ?? ""} onChange={(event) => updateMeasurement("coolSideTemperature", event.target.value)} /></label>
-                <label><span>UVI · basking</span><input aria-label="Indice UVB UVI dans la zone de basking" type="number" min="0" step="0.1" value={measurements.baskingUvi ?? ""} onChange={(event) => updateMeasurement("baskingUvi", event.target.value)} /></label>
-                <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} /></label>
+                <label><span>Zone chaude · °C</span><input aria-label="Température zone chaude en degrés" type="number" step="0.1" value={measurements.hotSideTemperature ?? ""} onChange={(event) => updateMeasurement("hotSideTemperature", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
+                <label><span>Zone fraîche · °C</span><input aria-label="Température zone fraîche en degrés" type="number" step="0.1" value={measurements.coolSideTemperature ?? ""} onChange={(event) => updateMeasurement("coolSideTemperature", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
+                <label><span>UVI · basking</span><input aria-label="Indice UVB UVI dans la zone de basking" type="number" min="0" step="0.1" value={measurements.baskingUvi ?? ""} onChange={(event) => updateMeasurement("baskingUvi", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
+                <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
               </div>
               <p className="measurement-note">{lifeStage === "adult" ? `Repères ${selectedSpecies.source?.publisher} pour adulte; températures en °C converties si nécessaire.` : "Relevés conservés, mais aucune plage juvénile vérifiée ne permet de les comparer."} Mesurez chaque zone séparément.</p>
             </div>}
@@ -661,9 +683,9 @@ function App() {
           <div className="stage-toolbar">
             <div className="stage-view-controls">
               <div className="view-tabs"><button className={viewMode === "3d" ? "active" : ""} type="button" aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}><Eye size={14} /> Vue 3D</button><button className={viewMode === "plan" ? "active" : ""} type="button" aria-pressed={viewMode === "plan"} onClick={() => setViewMode("plan")}><Ruler size={14} /> Plan</button></div>
-              <div className="history-controls" role="group" aria-label="Historique du décor">
-                <button type="button" aria-label="Annuler le changement de décor" aria-keyshortcuts="Control+Z Meta+Z" title="Annuler · Ctrl/Cmd+Z" disabled={!canUndoDecorations} onClick={() => dispatchDecorationHistory({ type: "undo" })}><Undo2 size={15} /></button>
-                <button type="button" aria-label="Rétablir le changement de décor" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Rétablir · Ctrl/Cmd+Shift+Z" disabled={!canRedoDecorations} onClick={() => dispatchDecorationHistory({ type: "redo" })}><Redo2 size={15} /></button>
+              <div className="history-controls" role="group" aria-label="Historique du projet">
+                <button type="button" aria-label="Annuler le changement" aria-keyshortcuts="Control+Z Meta+Z" title="Annuler · Ctrl/Cmd+Z" disabled={!canUndoProject} onClick={() => dispatchProjectHistory({ type: "undo" })}><Undo2 size={15} /></button>
+                <button type="button" aria-label="Rétablir le changement" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Rétablir · Ctrl/Cmd+Shift+Z" disabled={!canRedoProject} onClick={() => dispatchProjectHistory({ type: "redo" })}><Redo2 size={15} /></button>
               </div>
               <button className={`zones-toggle ${showHabitatZones ? "active" : ""}`} type="button" aria-pressed={showHabitatZones} onClick={() => setShowHabitatZones((visible) => !visible)}><Layers size={14} /> Zones</button>
             </div>

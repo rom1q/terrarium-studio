@@ -55,6 +55,7 @@ type DecorationPanelProps = {
   onUpdateRotation: (id: number, value: string) => void;
   onUpdateVariant: (id: number, variant: string) => void;
   onUpdatePlantSpecies: (id: number, plantSpeciesId: string) => void;
+  onFinishNumericEdit: () => void;
 };
 
 export function DecorationPanel({
@@ -73,6 +74,7 @@ export function DecorationPanel({
   onUpdateRotation,
   onUpdateVariant,
   onUpdatePlantSpecies,
+  onFinishNumericEdit,
 }: DecorationPanelProps) {
   const plantOptions = [...plantCatalog].sort((first, second) => {
     const priority = { recommended: 0, unknown: 1, "not-recommended": 2 };
@@ -125,12 +127,12 @@ export function DecorationPanel({
               {item.kind === "Plante" && !plantProfile && <small className={`plant-variant-note ${variantIsSuggested ? "" : "not-suggested"}`}>{variantIsSuggested ? "Modèle visuel uniquement; choisissez une espèce botanique pour afficher ses besoins." : `Style non proposé pour le biotope ${biotope.toLowerCase()}.`}</small>}
               {plantProfile && plantBiotopeStatus && <div className={`plant-profile-note ${plantBiotopeStatus}`}><span>{plantProfile.scientificName} · {plantProfile.careSummary}</span><strong>Biotope {plantBiotopeStatusLabels[plantBiotopeStatus]}</strong><small>Sécurité pour reptiles non documentée.</small>{plantProfile.toxicityNote && <small className="plant-toxicity-note">{plantProfile.toxicityNote}</small>}<a href={plantProfile.source.url} target="_blank" rel="noreferrer">Source · {plantProfile.source.publisher}</a></div>}
               <div className="decor-coordinate-grid">
-                <label><span>X · gauche</span><input type="number" min="0" max={dimensions.width} step="1" aria-label={`Position X de ${item.kind} en centimètres`} value={item.xCm} onChange={(event) => onUpdatePosition(item.id, "x", event.target.value)} /></label>
-                <label><span>Z · haut</span><input type="number" min="0" max={dimensions.depth} step="1" aria-label={`Position Z de ${item.kind} en centimètres`} value={item.zCm} onChange={(event) => onUpdatePosition(item.id, "z", event.target.value)} /></label>
-                <label><span>Y · hauteur</span><input type="number" min="0" max={dimensions.height} step="1" aria-label={`Hauteur Y de ${item.kind} en centimètres`} value={item.yCm} onChange={(event) => onUpdatePosition(item.id, "y", event.target.value)} /></label>
+                <label><span>X · gauche</span><input type="number" min="0" max={dimensions.width} step="1" aria-label={`Position X de ${item.kind} en centimètres`} value={item.xCm} onChange={(event) => onUpdatePosition(item.id, "x", event.target.value)} onBlur={onFinishNumericEdit} /></label>
+                <label><span>Z · haut</span><input type="number" min="0" max={dimensions.depth} step="1" aria-label={`Position Z de ${item.kind} en centimètres`} value={item.zCm} onChange={(event) => onUpdatePosition(item.id, "z", event.target.value)} onBlur={onFinishNumericEdit} /></label>
+                <label><span>Y · hauteur</span><input type="number" min="0" max={dimensions.height} step="1" aria-label={`Hauteur Y de ${item.kind} en centimètres`} value={item.yCm} onChange={(event) => onUpdatePosition(item.id, "y", event.target.value)} onBlur={onFinishNumericEdit} /></label>
               </div>
-              <label className="decor-size-control"><span>Taille visuelle <output>{item.size ?? 100}%</output></span><input type="range" min="50" max="150" step="10" aria-label={`Taille visuelle de ${item.kind}`} value={item.size ?? 100} onChange={(event) => onUpdateSize(item.id, event.target.value)} /></label>
-              <label className="decor-rotation-control"><span>Rotation Y · degrés</span><input type="number" min="0" max="359" step="15" aria-label={`Rotation de ${item.kind} en degrés`} value={item.rotation ?? 0} onChange={(event) => onUpdateRotation(item.id, event.target.value)} /></label>
+              <label className="decor-size-control"><span>Taille visuelle <output>{item.size ?? 100}%</output></span><input type="range" min="50" max="150" step="10" aria-label={`Taille visuelle de ${item.kind}`} value={item.size ?? 100} onChange={(event) => onUpdateSize(item.id, event.target.value)} onBlur={onFinishNumericEdit} /></label>
+              <label className="decor-rotation-control"><span>Rotation Y · degrés</span><input type="number" min="0" max="359" step="15" aria-label={`Rotation de ${item.kind} en degrés`} value={item.rotation ?? 0} onChange={(event) => onUpdateRotation(item.id, event.target.value)} onBlur={onFinishNumericEdit} /></label>
             </div>
             <button type="button" className="remove-button" title={`Retirer ${item.kind}`} aria-label={`Retirer ${item.kind}`} onClick={() => onRemoveDecoration(item.id)}><X size={14} /></button>
           </div>;
