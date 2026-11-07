@@ -5,6 +5,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { getDefaultDecorationVariant, getEquipmentZoneSources, rotateDecoration, type Biotope, type Decoration, type HabitatZoneGuidance, type HabitatZoneKey, type Shape, type SpeciesProfile } from "../../domain/projectLogic";
 import { plantCatalog } from "../../data/plantCatalog";
+import { createPlantModel } from "./plantModels";
 
 type TerrariumSceneProps = {
   shape: Shape;
@@ -155,32 +156,9 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       const plantProfile = item.kind === "Plante" ? getPlantProfile(item.plantSpeciesId) : undefined;
       const variant = item.variant ?? plantProfile?.visualVariant ?? getDefaultDecorationVariant(item.kind, biotope);
       if (item.kind === "Plante") {
-        const plant = new THREE.Group();
+        const plant = createPlantModel(plantProfile?.visual, variant, colors.plant);
         plant.userData.decorationId = item.id;
-        const stem = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.018, 0.026, 0.62, 7),
-          new THREE.MeshStandardMaterial({ color: 0x65804b, roughness: 0.8 }),
-        );
-        if (variant === "Rosette") stem.visible = false;
-        stem.position.y = 0.38;
-        plant.add(stem);
-        const leafCount = variant === "Feuillage dense" ? 5 : 8;
-        for (let leaf = 0; leaf < leafCount; leaf += 1) {
-          const angle = leaf * (Math.PI * 2 / leafCount);
-          const leafRadius = variant === "Fougère" ? 0.1 : variant === "Rosette" ? 0.16 : 0.13;
-          const leafWidth = variant === "Fougère" ? 0.07 : 0.13;
-          const leafHeight = variant === "Rosette" ? 0.3 : variant === "Fougère" ? 0.36 : 0.42;
-          const leafY = variant === "Rosette" ? 0.22 : 0.48 + leaf * (variant === "Fougère" ? 0.065 : 0.1);
-          const foliage = new THREE.Mesh(
-            new THREE.ConeGeometry(leafWidth, leafHeight, 5),
-            new THREE.MeshStandardMaterial({ color: leaf % 2 ? 0x55804b : colors.plant, roughness: 0.78 }),
-          );
-          foliage.position.set(Math.cos(angle) * leafRadius, leafY, Math.sin(angle) * leafRadius);
-          foliage.rotation.z = Math.cos(angle) * (variant === "Rosette" ? 0.8 : 0.5);
-          foliage.rotation.x = Math.sin(angle) * (variant === "Rosette" ? 0.8 : 0.4);
-          plant.add(foliage);
-        }
-        plant.scale.setScalar(sizeScale);
+        plant.scale.multiplyScalar(sizeScale);
         plant.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
         plant.position.set(x, floorY + 0.1 + verticalOffset, z);
         scene.add(plant);

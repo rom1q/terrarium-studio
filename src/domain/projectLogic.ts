@@ -18,6 +18,8 @@ export const decorationVariants = {
 export type DecorationKind = keyof typeof decorationVariants;
 export type DecorationVariant = (typeof decorationVariants)[DecorationKind][number];
 export type PlantBiotopeStatus = "recommended" | "not-recommended" | "unknown";
+export type PlantSilhouette = "fern" | "arching-straps" | "rosette" | "spiky-rosette" | "aloe" | "broadleaf" | "prayer-leaves" | "bird-nest" | "ground-mat" | "umbrella" | "grass-clump";
+export type PlantVisualProfile = { silhouette: PlantSilhouette; heightScale: number; spreadScale: number; density: number };
 export type PlantProfile = {
   id: string;
   commonName: string;
@@ -25,6 +27,7 @@ export type PlantProfile = {
   visualVariant: Extract<DecorationVariant, "Feuillage dense" | "Fougère" | "Rosette">;
   careSummary: string;
   biotopeGuidance: Partial<Record<Biotope, PlantBiotopeStatus>>;
+  visual: PlantVisualProfile;
   toxicityNote?: string;
   source: SpeciesSource;
 };
