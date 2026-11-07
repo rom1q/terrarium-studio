@@ -53,7 +53,8 @@ import { getPlantProfile } from "../data/plantCatalog";
 import { speciesCatalog as speciesList, speciesLabels } from "../data/speciesCatalog";
 import { DecorationIcon, DecorationPanel, decorationKindClass } from "../features/terrarium/DecorationPanel";
 import { TerrariumScene } from "../features/terrarium/TerrariumScene";
-import type { LayoutWarning } from "../domain/layoutValidation";
+import { applyDecorationLayoutSuggestion } from "../domain/layoutValidation";
+import type { LayoutSuggestion, LayoutWarning } from "../domain/layoutValidation";
 import {
   clearCurrentProject,
   downloadProjectExport,
@@ -117,6 +118,7 @@ function App() {
   const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
   const selectedDecorationIdRef = useRef<number | null>(null);
   const [activeLayoutWarningId, setActiveLayoutWarningId] = useState<string | null>(null);
+  const [previewedLayoutSuggestion, setPreviewedLayoutSuggestion] = useState<LayoutSuggestion | null>(null);
   const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
   const [decorations, setDecorations] = useState<Decoration[]>(initialProject?.decorations ?? createDefaultDecorations());
   const [nextId, setNextId] = useState(initialProject?.nextId ?? 4);
@@ -126,6 +128,7 @@ function App() {
   };
   const handleSceneDecorationSelection = (id: number | null) => {
     setActiveLayoutWarningId(null);
+    setPreviewedLayoutSuggestion(null);
     selectDecoration(id);
   };
 
@@ -461,8 +464,20 @@ function App() {
   const activeLayoutWarning = checks.flatMap((check) => check.issues ?? []).find((warning) => warning.id === activeLayoutWarningId) ?? null;
   const showLayoutWarning = (warning: LayoutWarning) => {
     setViewMode("3d");
+    setPreviewedLayoutSuggestion(null);
     setActiveLayoutWarningId(warning.id);
     selectDecoration(warning.decorationIds[0] ?? null);
+  };
+  const previewLayoutSuggestion = (suggestion: LayoutSuggestion) => {
+    setViewMode("3d");
+    setPreviewedLayoutSuggestion(suggestion);
+    selectDecoration(suggestion.decorationId);
+  };
+  const applyLayoutSuggestion = (suggestion: LayoutSuggestion) => {
+    setDecorations((current) => applyDecorationLayoutSuggestion(current, suggestion));
+    setActiveLayoutWarningId(null);
+    setPreviewedLayoutSuggestion(null);
+    selectDecoration(suggestion.decorationId);
   };
   const checkStatusLabels: Record<CheckStatus, string> = {
     met: "Repère atteint",
@@ -619,7 +634,7 @@ function App() {
             <span className="stage-dimensions">{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</span>
           </div>
           <div className="viewport-wrap">
-            <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />
+            <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} previewedLayoutSuggestion={previewedLayoutSuggestion} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />
             <div className="viewport-label"><span className="live-dot" /> {viewMode === "plan" ? "VUE EN PLAN" : "APERÇU EN DIRECT"}</div>
             <div className="viewport-tools"><button type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={16} /></button></div>
             {showHabitatZones && <div className="habitat-zone-guide" aria-label="Disponibilité des zones selon les sources">
@@ -654,7 +669,14 @@ function App() {
             return warnings.length > 0
               ? <div className="check-warning-group" key={check.label}>
                 <div className="check-row">{icon}<span>{check.label}</span><small>{warnings.length} alerte{warnings.length > 1 ? "s" : ""}</small></div>
-                {warnings.map((warning) => <button className="check-row check-row-action" key={warning.id} type="button" title="Afficher les volumes en 3D" aria-label={`Afficher en 3D : ${warning.message}`} onClick={() => showLayoutWarning(warning)}><span>{warning.message}</span><Eye size={13} aria-hidden="true" /></button>)}
+                {warnings.map((warning) => <div className="layout-warning-item" key={warning.id}>
+                  <button className="check-row check-row-action" type="button" title="Afficher les volumes en 3D" aria-label={`Afficher en 3D : ${warning.message}`} aria-expanded={activeLayoutWarningId === warning.id} onClick={() => showLayoutWarning(warning)}><span>{warning.message}</span><Eye size={13} aria-hidden="true" /></button>
+                  {activeLayoutWarningId === warning.id && warning.suggestions.map((suggestion) => <div className="layout-suggestion" key={suggestion.id}>
+                    {previewedLayoutSuggestion?.id === suggestion.id
+                      ? <><span>{suggestion.message} · aperçu actif</span><button type="button" className="layout-suggestion-apply" onClick={() => applyLayoutSuggestion(suggestion)}><Check size={12} /> Appliquer</button><button type="button" className="layout-suggestion-cancel" onClick={() => setPreviewedLayoutSuggestion(null)}>Annuler</button></>
+                      : <button type="button" className="layout-suggestion-preview" onClick={() => previewLayoutSuggestion(suggestion)}><Eye size={12} /> Prévisualiser · {suggestion.message}</button>}
+                  </div>)}
+                </div>)}
               </div>
               : <div className="check-row" key={check.label}>{icon}<span>{check.label}</span><small>{check.detail}</small></div>;
           })}

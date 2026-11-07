@@ -8,7 +8,7 @@ import { plantCatalog } from "../../data/plantCatalog";
 import { createPlantModel } from "./plantModels";
 import { createRockModel } from "./decorationModels";
 import { createHideModel } from "./hideModels";
-import { getTerrariumSceneDimensions, type LayoutWarning } from "../../domain/layoutValidation";
+import { getTerrariumSceneDimensions, type LayoutSuggestion, type LayoutWarning } from "../../domain/layoutValidation";
 import { getDecorationGeometryProfile, otherDecorationGeometryProfiles } from "../../domain/decorationGeometry";
 
 type TerrariumSceneProps = {
@@ -23,6 +23,7 @@ type TerrariumSceneProps = {
   habitatZoneGuidance: HabitatZoneGuidance[];
   showHabitatZones: boolean;
   activeLayoutWarning: LayoutWarning | null;
+  previewedLayoutSuggestion: LayoutSuggestion | null;
   onDecorationSelectionChange: (id: number | null) => void;
   onDecorationsChange: Dispatch<SetStateAction<Decoration[]>>;
 };
@@ -37,15 +38,18 @@ function getPlantProfile(id: string | undefined) {
   return id ? plantCatalog.find((plant) => plant.id === id) : undefined;
 }
 
-export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
+export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const selectionHandlerRef = useRef(onDecorationSelectionChange);
   const selectedDecorationIdRef = useRef(selectedDecorationId);
   const activeLayoutWarningRef = useRef(activeLayoutWarning);
+  const previewedLayoutSuggestionRef = useRef(previewedLayoutSuggestion);
   const activeLayoutWarningKey = activeLayoutWarning ? JSON.stringify(activeLayoutWarning) : "";
+  const previewedLayoutSuggestionKey = previewedLayoutSuggestion ? JSON.stringify(previewedLayoutSuggestion) : "";
   selectionHandlerRef.current = onDecorationSelectionChange;
   selectedDecorationIdRef.current = selectedDecorationId;
   activeLayoutWarningRef.current = activeLayoutWarning;
+  previewedLayoutSuggestionRef.current = previewedLayoutSuggestion;
 
   useEffect(() => {
     const host = viewportRef.current;
@@ -394,6 +398,44 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         camera.position.copy(focusPosition).add(cameraOffset);
       }
     }
+    const previewSuggestion = previewedLayoutSuggestionRef.current;
+    if (viewMode === "3d" && previewSuggestion) {
+      const source = decorationObjectsById.get(previewSuggestion.decorationId);
+      const decoration = decorations.find((item) => item.id === previewSuggestion.decorationId);
+      if (source && decoration) {
+        const ghost = source.clone(true);
+        ghost.traverse((object) => {
+          if (!(object instanceof THREE.Mesh)) return;
+          object.geometry = object.geometry.clone();
+          const originalMaterials = Array.isArray(object.material) ? object.material : [object.material];
+          const previewMaterials = originalMaterials.map((original) => {
+            const material = original.clone();
+            material.transparent = true;
+            material.opacity = 0.38;
+            material.depthWrite = false;
+            if ("color" in material) (material as THREE.MeshStandardMaterial).color.lerp(new THREE.Color(0x48a7b6), 0.45);
+            return material;
+          });
+          object.material = Array.isArray(object.material) ? previewMaterials : previewMaterials[0];
+          object.renderOrder = 8;
+        });
+        const profile = getDecorationGeometryProfile(decoration, biotope);
+        ghost.position.set(
+          previewSuggestion.position.x * widthHalf,
+          floorY + 0.1 + profile.rootOffsetY + previewSuggestion.position.y * height,
+          previewSuggestion.position.z * depthHalf,
+        );
+        scene.add(ghost);
+        ghost.updateMatrixWorld(true);
+        const previewOutline = new THREE.Box3Helper(new THREE.Box3().setFromObject(ghost), 0x3394a4);
+        const previewMaterial = previewOutline.material as THREE.LineBasicMaterial;
+        previewMaterial.depthTest = false;
+        previewMaterial.transparent = true;
+        previewMaterial.opacity = 0.95;
+        previewOutline.renderOrder = 11;
+        scene.add(previewOutline);
+      }
+    }
     transformControls.addEventListener("dragging-changed", (event) => {
       controls.enabled = !event.value;
     });
@@ -549,7 +591,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         }
       });
     };
-  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarningKey]);
+  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
 
   return <div className="viewport" ref={viewportRef} data-mode={viewMode} />;
 }

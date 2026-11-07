@@ -214,6 +214,13 @@ h1, h2, p { margin-top: 0; }
 .check-row-action svg { flex: 0 0 auto; color: #68826b; }
 .check-row-action:hover { background: #f5f7f2; color: #435d49; }
 .check-row-action:focus-visible { outline: 2px solid #6a876e; outline-offset: 2px; }
+.layout-suggestion { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 5px 4px 7px 26px; border-bottom: 1px solid #eef0ea; color: #64736a; font-size: 8px; }
+.layout-suggestion > span { flex: 1 1 100%; line-height: 1.4; }
+.layout-suggestion button { min-height: 25px; padding: 3px 7px; border: 1px solid #d6dfd4; border-radius: 3px; background: #f7f9f5; color: #506b56; font: inherit; cursor: pointer; }
+.layout-suggestion button { display: inline-flex; align-items: center; gap: 4px; }
+.layout-suggestion .layout-suggestion-apply { border-color: #49664f; background: #49664f; color: white; }
+.layout-suggestion button:hover { filter: brightness(0.96); }
+.layout-suggestion button:focus-visible { outline: 2px solid #6a876e; outline-offset: 2px; }
 .check-icon { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; }.check-icon.unknown { color: #a9a995; background: #f2f1e9; }.check-icon.met { color: #557358; background: #edf3e8; }.check-icon.insufficient { color: #995840; background: #f7ebe5; }.check-icon.attention { color: #9c753d; background: #faf1df; }
 .check-row small { margin-left: auto; max-width: 46%; text-align: right; font-size: 8px; line-height: 1.35; color: #969d94; }
 .report-note { display: flex; gap: 8px; background: #f3f5ef; border-radius: 4px; padding: 10px; color: #849080; margin-top: 13px; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeDecorationLayout, formatDecorationLayoutWarnings } from "./layoutValidation";
+import { analyzeDecorationLayout, applyDecorationLayoutSuggestion, formatDecorationLayoutWarnings } from "./layoutValidation";
 import type { Decoration } from "./projectLogic";
 
 const dimensions = { width: 120, depth: 60, height: 80 };
@@ -13,6 +13,17 @@ describe("decoration layout validation", () => {
     expect(warnings.boundaries[0].decorationIds).toEqual([1]);
     expect(warnings.boundaries[0].bounds).toHaveLength(1);
     expect(formatDecorationLayoutWarnings(warnings).boundaries).toContain("Roche 01");
+  });
+
+  it("suggests and applies the smallest safe correction for a wall overhang", () => {
+    const rock: Decoration = { id: 1, kind: "Roche", position: { x: 1, z: 0.55 }, size: 70 };
+    const warnings = analyzeDecorationLayout([rock], dimensions, "Basse");
+    const suggestion = warnings.boundaries[0].suggestions[0];
+
+    expect(suggestion).toBeDefined();
+    expect(suggestion.decorationId).toBe(rock.id);
+    expect(suggestion.position.x).toBeLessThan(rock.position.x);
+    expect(analyzeDecorationLayout(applyDecorationLayoutSuggestion([rock], suggestion), dimensions, "Basse").boundaries).toEqual([]);
   });
 
   it("checks every side wall as well as the floor and ceiling", () => {
@@ -41,16 +52,29 @@ describe("decoration layout validation", () => {
     const rock: Decoration = { id: 2, kind: "Roche", position: { x: 0, z: 0.6 } };
     const warnings = analyzeDecorationLayout([hide, rock], dimensions, "Basse");
 
-    expect(warnings.clearances.some((warning) => warning.message.includes("chevauche"))).toBe(true);
+    const overlapWarning = warnings.clearances.find((warning) => warning.type === "overlap");
+    expect(overlapWarning).toBeDefined();
+    expect(overlapWarning?.suggestions.length).toBeGreaterThan(0);
     const entryWarning = warnings.clearances.find((warning) => warning.message.includes("entrée de Cachette 01 obstruée"));
     expect(entryWarning?.decorationIds).toEqual([1, 2]);
     expect(entryWarning?.bounds).toHaveLength(2);
+    expect(entryWarning?.suggestions.length).toBeGreaterThan(0);
+    const corrected = applyDecorationLayoutSuggestion([hide, rock], entryWarning!.suggestions[0]);
+    expect(analyzeDecorationLayout(corrected, dimensions, "Basse").clearances.some((warning) => warning.id === entryWarning?.id)).toBe(false);
   });
 
   it("allows vertically separated stacking and centered objects within all walls", () => {
     const rock: Decoration = { id: 1, kind: "Roche", position: { x: 0, z: 0 } };
     const plant: Decoration = { id: 2, kind: "Plante", plantSpeciesId: "echeveria-elegans", position: { x: 0, y: 0.4, z: 0 } };
     const warnings = analyzeDecorationLayout([rock, plant], dimensions, "Basse");
+
+    expect(warnings.boundaries).toEqual([]);
+    expect(warnings.clearances).toEqual([]);
+  });
+
+  it("does not offer a correction when the placement is already clear", () => {
+    const rock: Decoration = { id: 1, kind: "Roche", position: { x: 0, z: 0 } };
+    const warnings = analyzeDecorationLayout([rock], dimensions, "Basse");
 
     expect(warnings.boundaries).toEqual([]);
     expect(warnings.clearances).toEqual([]);
