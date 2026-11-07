@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateProjectChecks,
+  defaultDecorationVariant,
+  decorationVariants,
   isStoredProject,
   measureDecorationPlacement,
   parseProjectExport,
@@ -9,6 +11,7 @@ import {
   removeSavedProjectRecord,
   resizeDecoration,
   renameSavedProjectRecord,
+  updateDecorationVariant,
   type Measurements,
   type ProjectExport,
   type SpeciesProfile,
@@ -87,6 +90,7 @@ describe("project export validation", () => {
     ["oversized dimensions", { ...projectExport, project: { ...project, dimensions: { ...project.dimensions, width: 1001 } } }],
     ["position outside terrarium", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], position: { x: 1.1, z: 0 } }] } }],
     ["decoration size outside supported range", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], size: 151 }] } }],
+    ["variant incompatible with decoration kind", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], kind: "Plante", variant: "Grotte" }] } }],
     ["duplicate decoration IDs", { ...projectExport, project: { ...project, decorations: [project.decorations[0], { ...project.decorations[1], id: project.decorations[0].id }] } }],
   ])("rejects %s", (_reason, invalidExport) => {
     expect(parseProjectExport(invalidExport, speciesLabels)).toBeNull();
@@ -193,6 +197,20 @@ describe("dimensioned plan placement", () => {
     expect(resizeDecoration([decoration], decoration.id, 125)[0].size).toBe(125);
     expect(resizeDecoration([decoration], decoration.id, 200)[0].size).toBe(150);
     expect(resizeDecoration([decoration], decoration.id, 20)[0].size).toBe(50);
+  });
+
+  it("sets only variants allowed for each decoration kind", () => {
+    const plant = { id: 3, kind: "Plante" as const, position: { x: 0, z: 0 } };
+    const rock = { id: 4, kind: "Roche" as const, position: { x: 0, z: 0 } };
+    const hide = { id: 5, kind: "Cachette" as const, position: { x: 0, z: 0 } };
+    const decorations = [plant, rock, hide];
+
+    expect(defaultDecorationVariant).toEqual({ Plante: "Feuillage dense", Roche: "Roche anguleuse", Cachette: "Grotte" });
+    expect(decorationVariants.Plante).toContain("Fougère");
+    expect(updateDecorationVariant(decorations, plant.id, "Fougère")[0].variant).toBe("Fougère");
+    expect(updateDecorationVariant(decorations, rock.id, "Galet")[1].variant).toBe("Galet");
+    expect(updateDecorationVariant(decorations, hide.id, "Tronc creux")[2].variant).toBe("Tronc creux");
+    expect(updateDecorationVariant(decorations, plant.id, "Grotte")).toBe(decorations);
   });
 });
 

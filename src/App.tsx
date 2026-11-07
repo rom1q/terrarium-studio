@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import {
   calculateProjectChecks,
+  defaultDecorationVariant,
+  decorationVariants,
   isStoredProject,
   measureDecorationPlacement,
   parseProjectExport,
@@ -34,6 +36,7 @@ import {
   removeSavedProjectRecord,
   resizeDecoration,
   renameSavedProjectRecord,
+  updateDecorationVariant,
   type Biotope,
   type CheckStatus,
   type Decoration,
@@ -332,6 +335,7 @@ function App() {
       const x = item.position.x * widthHalf;
       const z = item.position.z * depthHalf;
       const sizeScale = (item.size ?? 100) / 100;
+      const variant = item.variant ?? defaultDecorationVariant[item.kind];
       if (item.kind === "Plante") {
         const plant = new THREE.Group();
         plant.userData.decorationId = item.id;
@@ -339,16 +343,23 @@ function App() {
           new THREE.CylinderGeometry(0.018, 0.026, 0.62, 7),
           new THREE.MeshStandardMaterial({ color: 0x65804b, roughness: 0.8 }),
         );
+        if (variant === "Rosette") stem.visible = false;
         stem.position.y = 0.38;
         plant.add(stem);
-        for (let leaf = 0; leaf < 5; leaf += 1) {
+        const leafCount = variant === "Feuillage dense" ? 5 : 8;
+        for (let leaf = 0; leaf < leafCount; leaf += 1) {
+          const angle = leaf * (Math.PI * 2 / leafCount);
+          const leafRadius = variant === "Fougère" ? 0.1 : variant === "Rosette" ? 0.16 : 0.13;
+          const leafWidth = variant === "Fougère" ? 0.07 : 0.13;
+          const leafHeight = variant === "Rosette" ? 0.3 : variant === "Fougère" ? 0.36 : 0.42;
+          const leafY = variant === "Rosette" ? 0.22 : 0.48 + leaf * (variant === "Fougère" ? 0.065 : 0.1);
           const foliage = new THREE.Mesh(
-            new THREE.ConeGeometry(0.13, 0.42, 5),
+            new THREE.ConeGeometry(leafWidth, leafHeight, 5),
             new THREE.MeshStandardMaterial({ color: leaf % 2 ? 0x55804b : colors.plant, roughness: 0.78 }),
           );
-          foliage.position.set(Math.cos(leaf * 1.25) * 0.13, 0.48 + leaf * 0.1, Math.sin(leaf * 1.25) * 0.13);
-          foliage.rotation.z = Math.cos(leaf * 1.25) * 0.5;
-          foliage.rotation.x = Math.sin(leaf * 1.25) * 0.4;
+          foliage.position.set(Math.cos(angle) * leafRadius, leafY, Math.sin(angle) * leafRadius);
+          foliage.rotation.z = Math.cos(angle) * (variant === "Rosette" ? 0.8 : 0.5);
+          foliage.rotation.x = Math.sin(angle) * (variant === "Rosette" ? 0.8 : 0.4);
           plant.add(foliage);
         }
         plant.scale.setScalar(sizeScale);
@@ -358,30 +369,41 @@ function App() {
       } else if (item.kind === "Cachette") {
         const hide = new THREE.Group();
         hide.userData.decorationId = item.id;
+        const isHollowTrunk = variant === "Tronc creux";
         const body = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(0.42, 0),
-          new THREE.MeshStandardMaterial({ color: 0x88735b, roughness: 1 }),
+          isHollowTrunk ? new THREE.CylinderGeometry(0.32, 0.34, 0.95, 12) : new THREE.DodecahedronGeometry(0.42, 0),
+          new THREE.MeshStandardMaterial({ color: variant === "Écorce creuse" ? 0x785a3c : isHollowTrunk ? 0x76513a : 0x88735b, roughness: 1 }),
         );
-        body.scale.set(1.25, 0.68, 0.95);
+        if (variant === "Écorce creuse") body.scale.set(1.45, 0.38, 1.05);
+        else if (isHollowTrunk) body.scale.set(1, 0.8, 0.9);
+        else body.scale.set(1.25, 0.68, 0.95);
+        if (isHollowTrunk) body.rotation.z = Math.PI / 2;
         body.position.y = 0.26;
         hide.add(body);
         const entrance = new THREE.Mesh(
           new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16),
           new THREE.MeshStandardMaterial({ color: 0x352e27, roughness: 1 }),
         );
-        entrance.rotation.x = Math.PI / 2;
-        entrance.position.set(0, 0.19, 0.36);
+        if (isHollowTrunk) {
+          entrance.rotation.z = Math.PI / 2;
+          entrance.position.set(0.35, 0.19, 0);
+        } else {
+          entrance.rotation.x = Math.PI / 2;
+          entrance.position.set(0, 0.19, 0.36);
+        }
         hide.add(entrance);
         hide.scale.setScalar(sizeScale);
         hide.position.set(x, floorY + 0.1, z);
         scene.add(hide);
         decorationObjects.push(hide);
       } else {
+        const isPebble = variant === "Galet";
         const rock = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(0.32, 0),
-          new THREE.MeshStandardMaterial({ color: item.id % 2 ? 0x9a8b76 : 0x776a5d, roughness: 0.98 }),
+          isPebble ? new THREE.SphereGeometry(0.32, 12, 8) : new THREE.DodecahedronGeometry(0.32, 0),
+          new THREE.MeshStandardMaterial({ color: variant === "Stratifiée" ? 0x9a9284 : item.id % 2 ? 0x9a8b76 : 0x776a5d, roughness: isPebble ? 0.72 : 0.98 }),
         );
-        rock.scale.set(1.2 * sizeScale, 0.82 * sizeScale, 0.95 * sizeScale);
+        const rockScale = variant === "Stratifiée" ? [1.35, 0.48, 1.1] : isPebble ? [1.25, 0.72, 0.95] : [1.2, 0.82, 0.95];
+        rock.scale.set(rockScale[0] * sizeScale, rockScale[1] * sizeScale, rockScale[2] * sizeScale);
         rock.position.set(x, floorY + 0.28, z);
         rock.userData.decorationId = item.id;
         scene.add(rock);
@@ -516,7 +538,7 @@ function App() {
       const column = current.length % 4;
       const row = Math.floor(current.length / 4);
       const position = { x: (column - 1.5) * 0.32, z: row % 2 === 0 ? -0.45 : 0.45 };
-      return [...current, { id: nextId, kind, position }];
+      return [...current, { id: nextId, kind, variant: defaultDecorationVariant[kind], position }];
     });
     setNextId((current) => current + 1);
   };
@@ -529,6 +551,10 @@ function App() {
 
   const updateDecorationSize = (id: number, value: string) => {
     setDecorations((current) => resizeDecoration(current, id, Number(value)));
+  };
+
+  const updateDecorationVariantChoice = (id: number, variant: string) => {
+    setDecorations((current) => updateDecorationVariant(current, id, variant));
   };
 
   const removeDecoration = (id: number) => {
@@ -899,12 +925,14 @@ function App() {
               <button type="button" onClick={() => addDecoration("Cachette")}><Plus size={14} /><Expand size={14} /> Cachette</button>
               <button type="button" onClick={() => addDecoration("Roche")}><Plus size={14} /><span className="rock-icon" /> Roche</button>
             </div>
+            <p className="decor-variant-note">Variantes visuelles uniquement; vérifiez la compatibilité des matériaux avec l’espèce.</p>
             <div className="decor-list">
               {positionedDecorations.map((item, index) => (
                 <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
                   <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={14} /> : item.kind === "Cachette" ? <Expand size={14} /> : <span className="rock-icon" />}</span>
                   <div className="decor-editor">
-                    <div className="decor-item-heading"><span>{item.kind} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">Paroi proche {item.nearestWallCm} cm</small></div>
+                    <div className="decor-item-heading"><span>{item.kind} · {item.variant ?? defaultDecorationVariant[item.kind]} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">Paroi proche {item.nearestWallCm} cm</small></div>
+                    <label className="decor-variant-control"><span>Type</span><select aria-label={`Type de ${item.kind}`} value={item.variant ?? defaultDecorationVariant[item.kind]} onChange={(event) => updateDecorationVariantChoice(item.id, event.target.value)}>{decorationVariants[item.kind].map((option) => <option key={option}>{option}</option>)}</select></label>
                     <div className="decor-coordinate-grid">
                       <label><span>X · gauche</span><input type="number" min="0" max={dimensions.width} step="1" aria-label={`Position X de ${item.kind} en centimètres`} value={item.xCm} onChange={(event) => updateDecorationPosition(item.id, "x", event.target.value)} /></label>
                       <label><span>Z · haut</span><input type="number" min="0" max={dimensions.depth} step="1" aria-label={`Position Z de ${item.kind} en centimètres`} value={item.zCm} onChange={(event) => updateDecorationPosition(item.id, "z", event.target.value)} /></label>
@@ -1017,7 +1045,7 @@ function App() {
               <h4>Décor à prévoir</h4>
               {decorationCounts.length === 0 ? <p className="report-no-decor">Aucun élément de décor placé.</p> : <>
                 <div className="report-material-counts">{decorationCounts.map((item) => <span key={item.kind}>{item.kind} <strong>× {item.count}</strong></span>)}</div>
-                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={13} /> : <span className="rock-icon" />}</span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")}</strong><small>X {item.xCm} cm depuis la gauche · Z {item.zCm} cm depuis le haut · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
+                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={13} /> : <span className="rock-icon" />}</span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? defaultDecorationVariant[item.kind]}</strong><small>X {item.xCm} cm depuis la gauche · Z {item.zCm} cm depuis le haut · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
               </>}
             </section>
             <h3>Critères et relevés</h3>

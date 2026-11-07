@@ -1,7 +1,19 @@
 export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
 export type LifeStage = "juvenile" | "adult";
-export type Decoration = { id: number; kind: "Plante" | "Cachette" | "Roche"; position: { x: number; z: number }; size?: number };
+export const decorationVariants = {
+  Plante: ["Feuillage dense", "Fougère", "Rosette"],
+  Roche: ["Roche anguleuse", "Galet", "Stratifiée"],
+  Cachette: ["Grotte", "Tronc creux", "Écorce creuse"],
+} as const;
+export type DecorationKind = keyof typeof decorationVariants;
+export type DecorationVariant = (typeof decorationVariants)[DecorationKind][number];
+export const defaultDecorationVariant: Record<DecorationKind, DecorationVariant> = {
+  Plante: "Feuillage dense",
+  Roche: "Roche anguleuse",
+  Cachette: "Grotte",
+};
+export type Decoration = { id: number; kind: DecorationKind; variant?: DecorationVariant; position: { x: number; z: number }; size?: number };
 export type DecorationAxis = "x" | "z";
 export type PositionedDecoration = Decoration & { xCm: number; zCm: number; nearestWallCm: number };
 export type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
@@ -88,6 +100,12 @@ export function resizeDecoration(decorations: Decoration[], id: number, size: nu
   return decorations.map((item) => item.id === id ? { ...item, size: normalizedSize } : item);
 }
 
+export function updateDecorationVariant(decorations: Decoration[], id: number, variant: string): Decoration[] {
+  const target = decorations.find((item) => item.id === id);
+  if (!target || !decorationVariants[target.kind].some((option) => option === variant)) return decorations;
+  return decorations.map((item) => item.id === id ? { ...item, variant: variant as DecorationVariant } : item);
+}
+
 export function isStoredProject(value: unknown, allowedSpecies: readonly string[]): value is StoredProject {
   if (typeof value !== "object" || value === null) return false;
   const project = value as Record<string, unknown>;
@@ -101,8 +119,11 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
     if (typeof item !== "object" || item === null) return false;
     const decoration = item as Record<string, unknown>;
     const position = decoration.position;
+    const isValidKind = ["Plante", "Cachette", "Roche"].includes(decoration.kind as string);
+    const allowedVariants: readonly string[] = isValidKind ? decorationVariants[decoration.kind as DecorationKind] : [];
+    const isValidVariant = decoration.variant === undefined || (typeof decoration.variant === "string" && allowedVariants.includes(decoration.variant));
     return Number.isInteger(decoration.id) &&
-      ["Plante", "Cachette", "Roche"].includes(decoration.kind as string) &&
+      isValidKind && isValidVariant &&
       typeof position === "object" && position !== null &&
       typeof (position as Record<string, unknown>).x === "number" &&
       typeof (position as Record<string, unknown>).z === "number" &&
