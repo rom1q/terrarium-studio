@@ -147,10 +147,13 @@ h1, h2, p { margin-top: 0; }
 .stage-guidance .field-label { margin-bottom: 4px; font-size: 8px; }
 .stage-guidance > p:not(.field-label) { margin: 0; color: #78847b; font-size: 9px; line-height: 1.45; }
 .stage-column { display: flex; flex-direction: column; min-width: 0; }
-.stage-toolbar { height: 43px; display: flex; align-items: flex-start; justify-content: space-between; }
+.stage-toolbar { min-height: 43px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.stage-view-controls { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
 .view-tabs { display: inline-flex; gap: 4px; background: #e5e9df; padding: 3px; border-radius: 5px; }
 .view-tabs button { border: 0; border-radius: 3px; background: transparent; color: #78847b; padding: 6px 10px; display: inline-flex; gap: 6px; align-items: center; font-size: 10px; cursor: pointer; }
 .view-tabs button.active { background: #fffefa; color: #435a47; box-shadow: 0 1px 3px #354a3714; }
+.zones-toggle { height: 32px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid #e0e6dc; border-radius: 4px; background: #fffefa; color: #78847b; font-size: 9px; cursor: pointer; }
+.zones-toggle.active { border-color: #b6c8b3; background: #edf3e8; color: #49664f; }
 .stage-dimensions { font: 500 10px var(--display); color: #89948a; padding-top: 8px; }
 .viewport-wrap { position: relative; min-height: 390px; flex: 1; border: 1px solid #dfe4da; border-radius: 6px; overflow: hidden; background: #e9ede4; }
 .viewport { position: absolute; inset: 0; }
@@ -159,6 +162,14 @@ h1, h2, p { margin-top: 0; }
 .viewport-label .live-dot { width: 6px; height: 6px; }
 .viewport-tools { position: absolute; top: 10px; right: 10px; }
 .viewport-tools button { background: #fffefaac; border: 1px solid #ffffffa8; backdrop-filter: blur(6px); }
+.habitat-zone-guide { position: absolute; z-index: 2; top: 43px; right: 10px; width: min(205px, calc(100% - 20px)); display: grid; gap: 6px; padding: 9px; border: 1px solid #ffffffb8; border-radius: 4px; background: #fffef2dc; color: #66746a; box-shadow: 0 2px 8px #29372f14; backdrop-filter: blur(6px); }
+.habitat-zone-guide > p { margin: 0; color: #58675c; font-size: 8px; font-weight: 700; }
+.habitat-zone-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 8px; }
+.habitat-zone-row > i { width: 8px; height: 8px; border-radius: 50%; background: #a4aaa2; }
+.habitat-zone-row > strong { color: #58675c; font-size: 8px; font-weight: 600; }
+.habitat-zone-row.unknown > strong, .habitat-zone-row.not-required > strong { color: #9aa39a; font-weight: 400; }
+.habitat-zone-row.hot > i { background: #c47a53; }.habitat-zone-row.cool > i { background: #6d9fac; }.habitat-zone-row.uv > i { background: #c4a64e; }.habitat-zone-row.retreat > i { background: #75837d; }
+.habitat-zone-guide > small { color: #8d978d; font-size: 7px; line-height: 1.4; }
 .viewport-caption { position: absolute; bottom: 13px; left: 14px; display: flex; gap: 11px; color: #66766a; font-size: 10px; }
 .caption-index { font: 600 9px var(--display); color: #89978a; }
 .viewport-caption b { color: #aab4a9; padding: 0 2px; }
@@ -276,7 +287,7 @@ h1, h2, p { margin-top: 0; }
   .topbar-actions { gap: 6px; }.save-feedback { position: absolute; right: 12px; top: 62px; z-index: 2; }
   .project-dropdown { left: 50%; transform: translateX(-50%); }
   .workspace { display: flex; flex-direction: column; padding: 10px; gap: 10px; }
-  .stage-column { order: -1; min-height: 440px; }.stage-toolbar { height: 38px; }.viewport-wrap { min-height: 360px; }
+  .stage-column { order: -1; min-height: 440px; }.stage-toolbar { min-height: 38px; }.view-tabs button { padding: 6px 7px; }.zones-toggle { padding: 0 6px; }.stage-dimensions { font-size: 8px; }.viewport-wrap { min-height: 360px; }
   .left-panel, .right-panel { max-height: none; }.left-panel { padding: 17px 15px; }.right-panel { display: flex; padding: 17px 15px; }
   .selected-species { border-bottom: 1px solid var(--line); padding: 15px 0; }.checklist-heading { padding-top: 14px; }.check-row { min-height: 34px; }.habitat-summary { padding-top: 16px; }.review-button { margin-top: 3px; }
   .app-footer { padding: 2px 12px 10px; }

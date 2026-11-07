@@ -45,6 +45,8 @@ export type SpeciesProfile = {
   hidesAtBothEnds: boolean | null;
   biotopeGuidance?: Partial<Record<Biotope, BiotopeGuidance>>;
 };
+export type HabitatZoneKey = "hot" | "cool" | "uv" | "retreat";
+export type HabitatZoneGuidance = { key: HabitatZoneKey; status: "documented" | "unknown" | "not-required"; range?: readonly [number, number] };
 export type StoredProject = {
   id: string;
   name: string;
@@ -78,6 +80,23 @@ export const PROJECT_EXPORT_FORMAT = "terrarium-studio-project";
 
 export function getBiotopeGuidance(species: Pick<SpeciesProfile, "biotopeGuidance">, biotope: Biotope): BiotopeGuidance {
   return species.biotopeGuidance?.[biotope] ?? { status: "unknown", detail: "Compatibilité non documentée par une source vérifiée." };
+}
+
+export function getHabitatZoneGuidance(species: Pick<SpeciesProfile, "referenceRanges" | "hidesAtBothEnds">): HabitatZoneGuidance[] {
+  const rangeZones = [
+    ["hot", "hotSideTemperature"],
+    ["cool", "coolSideTemperature"],
+    ["uv", "baskingUvi"],
+  ] as const;
+  const zones: HabitatZoneGuidance[] = rangeZones.map(([key, measurement]) => {
+    const range = species.referenceRanges?.[measurement];
+    return { key, status: range ? "documented" as const : "unknown" as const, ...(range ? { range } : {}) };
+  });
+  zones.push({
+    key: "retreat",
+    status: species.hidesAtBothEnds === true ? "documented" : species.hidesAtBothEnds === false ? "not-required" : "unknown",
+  });
+  return zones;
 }
 
 export function resolveBiotopeSelection(species: SpeciesProfile, requestedBiotope: Biotope): Biotope {

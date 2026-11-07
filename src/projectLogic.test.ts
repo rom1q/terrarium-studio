@@ -5,6 +5,7 @@ import {
   decorationVariants,
   duplicateDecoration,
   getBiotopeGuidance,
+  getHabitatZoneGuidance,
   getDecorationVariantsForBiotope,
   getDefaultDecorationVariant,
   isStoredProject,
@@ -292,6 +293,26 @@ describe("biotope compatibility", () => {
   it("keeps undocumented combinations as unknown and selectable", () => {
     expect(getBiotopeGuidance(pogona, "Paludarium").status).toBe("unknown");
     expect(resolveBiotopeSelection(pogona, "Paludarium")).toBe("Paludarium");
+  });
+});
+
+describe("habitat zone guidance", () => {
+  it("creates overlays only for documented ranges and hide requirements", () => {
+    expect(getHabitatZoneGuidance(pogona)).toEqual([
+      { key: "hot", status: "documented", range: [38, 42] },
+      { key: "cool", status: "documented", range: [22, 26] },
+      { key: "uv", status: "documented", range: [3, 5] },
+      { key: "retreat", status: "documented" },
+    ]);
+  });
+
+  it("keeps absent zone data unknown without inferring numeric ranges", () => {
+    expect(getHabitatZoneGuidance({ referenceRanges: null, hidesAtBothEnds: null })).toEqual([
+      { key: "hot", status: "unknown" },
+      { key: "cool", status: "unknown" },
+      { key: "uv", status: "unknown" },
+      { key: "retreat", status: "unknown" },
+    ]);
   });
 });
 

@@ -35,6 +35,7 @@ import {
   getBiotopeGuidance,
   getDecorationVariantsForBiotope,
   getDefaultDecorationVariant,
+  getHabitatZoneGuidance,
   isStoredProject,
   measureDecorationPlacement,
   parseProjectExport,
@@ -54,6 +55,7 @@ import {
   type MeasurementKey,
   type Measurements,
   type LifeStage,
+  type HabitatZoneKey,
   type ProjectExport,
   type Shape,
   type SpeciesProfile,
@@ -146,6 +148,13 @@ function DecorationIcon({ kind, size }: { kind: DecorationKind; size: number }) 
   return <span className="rock-icon" />;
 }
 
+const habitatZoneLabels: Record<HabitatZoneKey, string> = {
+  hot: "Zone chaude",
+  cool: "Zone fraîche",
+  uv: "UVB / basking",
+  retreat: "Retraits",
+};
+
 const biotopeColors: Record<Biotope, { ground: number; plant: number; water: number }> = {
   Désertique: { ground: 0xcda875, plant: 0x74884b, water: 0x8dbdc1 },
   Tropical: { ground: 0x604c38, plant: 0x568b50, water: 0x83bfc0 },
@@ -230,6 +239,9 @@ function App() {
   const [biotope, setBiotope] = useState<Biotope>(initialBiotope);
   const [dimensions, setDimensions] = useState(initialProject?.dimensions ?? { width: 120, depth: 60, height: 80 });
   const [species, setSpecies] = useState(initialProject?.species ?? speciesList[0].label);
+  const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
+  const habitatZoneGuidance = getHabitatZoneGuidance(selectedSpecies);
+  const [showHabitatZones, setShowHabitatZones] = useState(false);
   const [lifeStage, setLifeStage] = useState<LifeStage>(initialProject?.lifeStage ?? "adult");
   const [measurements, setMeasurements] = useState<Measurements>(initialProject?.measurements ?? createDefaultMeasurements());
   const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
@@ -321,6 +333,7 @@ function App() {
     const height = Math.min(3.1, Math.max(1.65, dimensions.height * heightScale));
     const floorY = 0.12;
     const colors = biotopeColors[biotope];
+    const zoneIsDocumented = (key: HabitatZoneKey) => habitatZoneGuidance.find((zone) => zone.key === key)?.status === "documented";
     const glass = new THREE.MeshPhysicalMaterial({
       color: 0xd9e6d9,
       transparent: true,
@@ -560,6 +573,27 @@ function App() {
     planGrid.visible = viewMode === "plan";
     scene.add(planGrid);
 
+    if (showHabitatZones) {
+      const addFloorZone = (key: HabitatZoneKey, x: number, z: number, radiusX: number, radiusZ: number, color: number) => {
+        const zone = new THREE.Mesh(
+          new THREE.CircleGeometry(1, 48),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.2, depthWrite: false }),
+        );
+        zone.rotation.x = -Math.PI / 2;
+        zone.position.set(x, floorY + 0.112 + (key === "uv" ? 0.002 : 0), z);
+        zone.scale.set(radiusX, radiusZ, 1);
+        scene.add(zone);
+      };
+      if (zoneIsDocumented("hot")) addFloorZone("hot", -width * 0.24, 0, width * 0.24, depth * 0.38, 0xc47a53);
+      if (zoneIsDocumented("cool")) addFloorZone("cool", width * 0.24, 0, width * 0.24, depth * 0.38, 0x6d9fac);
+      if (zoneIsDocumented("uv")) addFloorZone("uv", -width * 0.24, -depth * 0.14, width * 0.12, depth * 0.2, 0xc4a64e);
+      if (zoneIsDocumented("retreat")) {
+        decorations.filter((item) => item.kind === "Cachette").forEach((item) => {
+          addFloorZone("retreat", item.position.x * widthHalf, item.position.z * depthHalf, 0.28, 0.24, 0x75837d);
+        });
+      }
+    }
+
     transformControls.detach();
     scene.add(transformControls.getHelper());
     const selectedObject = selectedDecorationIdRef.current === null ? undefined : decorationObjectsById.get(selectedDecorationIdRef.current);
@@ -689,7 +723,7 @@ function App() {
         }
       });
     };
-  }, [shape, dimensions, biotope, decorations, viewMode, transformMode]);
+  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones]);
 
   const updateDimension = (key: keyof typeof dimensions, value: string) => {
     const numericValue = Number(value);
@@ -1019,7 +1053,6 @@ function App() {
     projectMenuRef.current?.removeAttribute("open");
   };
 
-  const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
   const selectedBiotopeGuidance = getBiotopeGuidance(selectedSpecies, biotope);
   const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, decorations, measurements, lifeStage });
   const checkStatusLabels: Record<CheckStatus, string> = {
@@ -1197,13 +1230,24 @@ function App() {
 
         <section className="stage-column" aria-label="Visualisation 3D">
           <div className="stage-toolbar">
-            <div className="view-tabs"><button className={viewMode === "3d" ? "active" : ""} type="button" aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}><Eye size={14} /> Vue 3D</button><button className={viewMode === "plan" ? "active" : ""} type="button" aria-pressed={viewMode === "plan"} onClick={() => setViewMode("plan")}><Ruler size={14} /> Plan</button></div>
+            <div className="stage-view-controls">
+              <div className="view-tabs"><button className={viewMode === "3d" ? "active" : ""} type="button" aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}><Eye size={14} /> Vue 3D</button><button className={viewMode === "plan" ? "active" : ""} type="button" aria-pressed={viewMode === "plan"} onClick={() => setViewMode("plan")}><Ruler size={14} /> Plan</button></div>
+              <button className={`zones-toggle ${showHabitatZones ? "active" : ""}`} type="button" aria-pressed={showHabitatZones} onClick={() => setShowHabitatZones((visible) => !visible)}><Layers size={14} /> Zones</button>
+            </div>
             <span className="stage-dimensions">{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</span>
           </div>
           <div className="viewport-wrap">
             <div className="viewport" ref={viewportRef} data-mode={viewMode} />
             <div className="viewport-label"><span className="live-dot" /> {viewMode === "plan" ? "VUE EN PLAN" : "APERÇU EN DIRECT"}</div>
             <div className="viewport-tools"><button type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={16} /></button></div>
+            {showHabitatZones && <div className="habitat-zone-guide" aria-label="Disponibilité des zones selon les sources">
+              <p>Repères sourcés · {selectedSpecies.source?.publisher ?? "aucune source"}</p>
+              {habitatZoneGuidance.map((zone) => {
+                const rangeText = zone.range ? `${zone.range[0]}–${zone.range[1]} ${zone.key === "uv" ? "UVI" : "°C"}` : zone.status === "documented" ? "Requis" : zone.status === "not-required" ? "Non requis" : "Non documenté";
+                return <div className={`habitat-zone-row ${zone.key} ${zone.status}`} key={zone.key}><i /><span>{habitatZoneLabels[zone.key]}</span><strong>{rangeText}</strong></div>;
+              })}
+              <small>Repères visuels indicatifs; ils ne simulent ni température, ni UV, ni ombres réelles.</small>
+            </div>}
             <div className="viewport-caption"><span className="caption-index">FIG. 01</span><span>{biotope} <b>·</b> {shape.toLowerCase()}</span></div>
           </div>
           <div className="stage-footer"><span><span className="legend-dot glass-dot" /> Verre clair</span><span><span className="legend-dot ground-dot" /> Substrat {biotope.toLowerCase()}</span><span className="orbit-hint">{viewMode === "plan" ? "Glisser un élément pour le déplacer" : `${decorations.length} éléments dans la scène`}</span></div>
