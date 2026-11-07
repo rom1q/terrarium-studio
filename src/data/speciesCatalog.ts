@@ -59,22 +59,28 @@ export const speciesCatalog: SpeciesProfile[] = [
     scientificName: "Pantherophis guttatus",
     commonName: "Serpent des blés",
     source: { title: "Corn snake care", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/cornsnake", checkedAt: "2026-11-07" },
+    stageGuidance: {
+      juvenile: "La RSPCA indique un repas tous les 5–6 jours pour les nouveau-nés, puis tous les 7–14 jours à l’âge adulte.",
+    },
     minimumDimensions: null,
-    dimensionGuidance: "La longueur du vivarium doit au moins égaler celle du serpent; largeur et hauteur : au moins un tiers de sa longueur (exemple RSPCA : 150 × 50 × 50 cm pour un serpent de 150 cm).",
+    dimensionGuidance: "La longueur du vivarium doit au moins égaler celle du serpent; profondeur et hauteur : au moins un tiers de sa longueur (exemple RSPCA : 150 × 50 × 50 cm pour un serpent de 150 cm).",
     environmentGuidance: "La RSPCA indique aussi 16–20 °C la nuit et un gradient UV jusqu’à UVI 1; pour les morphes albinos, le maximum indiqué est UVI 0,7.",
     referenceRanges: { hotSideTemperature: [28, 30], coolSideTemperature: [20, 24], baskingUvi: [1, 1], coolSideHumidity: [40, 50] },
-    hidesAtBothEnds: null,
+    hidesAtBothEnds: true,
   },
   {
     label: "Python regius · Python royal",
     scientificName: "Python regius",
     commonName: "Python royal",
     source: { title: "Keeping a royal python as a pet", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/royalpython", checkedAt: "2026-11-07" },
+    stageGuidance: {
+      juvenile: "La RSPCA indique un repas tous les 5–6 jours pour les jeunes, puis tous les 7–14 jours à l’âge adulte, selon le poids.",
+    },
     minimumDimensions: null,
-    dimensionGuidance: "La longueur du vivarium doit au moins égaler celle du serpent; largeur et hauteur : au moins un tiers de sa longueur (exemple RSPCA : 120 × 40 × 40 cm pour un serpent de 120 cm).",
+    dimensionGuidance: "La longueur du vivarium doit au moins égaler celle du serpent; profondeur et hauteur : au moins un tiers de sa longueur (exemple RSPCA : 120 × 40 × 40 cm pour un serpent de 120 cm).",
     environmentGuidance: "La RSPCA recommande un refuge humide et une hausse temporaire de l’humidité vers 80 % après brumisation, puis une baisse.",
     referenceRanges: { hotSideTemperature: [30, 32], coolSideTemperature: [24, 26], baskingUvi: [1, 1], coolSideHumidity: [50, 60] },
-    hidesAtBothEnds: null,
+    hidesAtBothEnds: true,
   },
 ];
 

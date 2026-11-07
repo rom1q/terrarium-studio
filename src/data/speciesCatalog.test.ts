@@ -12,7 +12,8 @@ describe("sourced animal catalog", () => {
     expect(cornSnake?.dimensionGuidance).toContain("un tiers");
     expect(cornSnake?.environmentGuidance).toContain("16–20 °C la nuit");
     expect(cornSnake?.referenceRanges).toEqual({ hotSideTemperature: [28, 30], coolSideTemperature: [20, 24], baskingUvi: [1, 1], coolSideHumidity: [40, 50] });
-    expect(cornSnake?.hidesAtBothEnds).toBeNull();
+    expect(cornSnake?.stageGuidance?.juvenile).toContain("5–6 jours");
+    expect(cornSnake?.hidesAtBothEnds).toBe(true);
 
     expect(royalPython?.source?.publisher).toBe("RSPCA");
     expect(royalPython?.source?.checkedAt).toBe("2026-11-07");
@@ -21,7 +22,8 @@ describe("sourced animal catalog", () => {
     expect(royalPython?.environmentGuidance).toContain("80 %");
     expect(royalPython?.referenceRanges?.hotSideTemperature).toEqual([30, 32]);
     expect(royalPython?.referenceRanges?.coolSideHumidity).toEqual([50, 60]);
-    expect(royalPython?.hidesAtBothEnds).toBeNull();
+    expect(royalPython?.stageGuidance?.juvenile).toContain("7–14 jours");
+    expect(royalPython?.hidesAtBothEnds).toBe(true);
   });
 
   it("keeps dimension guidance separate from unsupported fixed thresholds", () => {
