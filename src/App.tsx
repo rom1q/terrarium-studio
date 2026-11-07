@@ -26,18 +26,21 @@ import {
 } from "lucide-react";
 import {
   calculateProjectChecks,
-  defaultDecorationVariant,
-  decorationVariants,
+  getBiotopeGuidance,
+  getDecorationVariantsForBiotope,
+  getDefaultDecorationVariant,
   isStoredProject,
   measureDecorationPlacement,
   parseProjectExport,
   positionDecorationAtCm,
   PROJECT_EXPORT_FORMAT,
+  resolveBiotopeSelection,
   removeSavedProjectRecord,
   resizeDecoration,
   renameSavedProjectRecord,
   updateDecorationVariant,
   type Biotope,
+  type DecorationAxis,
   type CheckStatus,
   type Decoration,
   type MeasurementKey,
@@ -60,6 +63,11 @@ const speciesList: SpeciesProfile[] = [
     scientificName: "Pogona vitticeps",
     commonName: "Dragon barbu",
     source: { title: "Caring for your bearded dragon", publisher: "RSPCA", url: "https://www.rspca.org.uk/adviceandwelfare/pets/other/beardeddragon", checkedAt: "2026-11-06" },
+    biotopeGuidance: {
+      Désertique: { status: "compatible", detail: "La RSPCA décrit un habitat d’origine sec et recommande 30–40 % d’humidité." },
+      Tropical: { status: "incompatible", detail: "La RSPCA décrit un habitat sec et une humidité basse (30–40 %)." },
+      Paludarium: { status: "incompatible", detail: "La RSPCA recommande un habitat sec, bien ventilé et à faible humidité (30–40 %)." },
+    },
     stageGuidance: {
       juvenile: "Les jeunes dragons ont besoin d’une plus grande part de proies; la part de végétaux augmente avec l’âge. La RSPCA indique deux repas par jour pour les bébés et un pour les juvéniles.",
     },
@@ -85,6 +93,11 @@ const speciesList: SpeciesProfile[] = [
       coolSideHumidity: [30, 40],
     },
     hidesAtBothEnds: null,
+    biotopeGuidance: {
+      Désertique: { status: "compatible", detail: "ReptiFiles situe l’espèce en zones semi-désertiques et prairies arides, avec 30–40 % d’humidité." },
+      Tropical: { status: "incompatible", detail: "Les repères ReptiFiles sont adaptés à un habitat aride et une humidité de 30–40 %." },
+      Paludarium: { status: "incompatible", detail: "Les repères ReptiFiles indiquent un habitat aride et une humidité de 30–40 %, pas une configuration humide." },
+    },
   },
   {
     label: "Correlophus ciliatus · Gecko à crête",
@@ -99,6 +112,10 @@ const speciesList: SpeciesProfile[] = [
       coolSideHumidity: [60, 80],
     },
     hidesAtBothEnds: null,
+    biotopeGuidance: {
+      Désertique: { status: "incompatible", detail: "ReptiFiles décrit une espèce arboricole de Nouvelle-Calédonie avec 60–80 % d’humidité." },
+      Tropical: { status: "compatible", detail: "ReptiFiles décrit un gecko arboricole de Nouvelle-Calédonie avec une humidité de 60–80 %." },
+    },
   },
   {
     label: "Dendrobates tinctorius · Dendrobate",
@@ -179,6 +196,8 @@ function App() {
   const projectMenuRef = useRef<HTMLDetailsElement>(null);
   const projectImportInputRef = useRef<HTMLInputElement>(null);
   const [initialProject] = useState<StoredProject | null>(readCurrentProject);
+  const initialSpeciesProfile = speciesList.find((item) => item.label === initialProject?.species) ?? speciesList[0];
+  const initialBiotope = resolveBiotopeSelection(initialSpeciesProfile, initialProject?.biotope ?? "Désertique");
   const lastSavedProjectRef = useRef<string | null>(initialProject ? JSON.stringify(initialProject) : null);
   const [projectId, setProjectId] = useState(initialProject?.id ?? null);
   const [projectName, setProjectName] = useState(initialProject?.name ?? "Habitat sans titre");
@@ -191,7 +210,7 @@ function App() {
   const [showReport, setShowReport] = useState(false);
   const [draftProjectName, setDraftProjectName] = useState("");
   const [shape, setShape] = useState<Shape>(initialProject?.shape ?? "Basse");
-  const [biotope, setBiotope] = useState<Biotope>(initialProject?.biotope ?? "Tropical");
+  const [biotope, setBiotope] = useState<Biotope>(initialBiotope);
   const [dimensions, setDimensions] = useState(initialProject?.dimensions ?? { width: 120, depth: 60, height: 80 });
   const [species, setSpecies] = useState(initialProject?.species ?? speciesList[0].label);
   const [lifeStage, setLifeStage] = useState<LifeStage>(initialProject?.lifeStage ?? "adult");
@@ -334,8 +353,9 @@ function App() {
     decorations.forEach((item) => {
       const x = item.position.x * widthHalf;
       const z = item.position.z * depthHalf;
+      const verticalOffset = (item.position.y ?? 0) * height;
       const sizeScale = (item.size ?? 100) / 100;
-      const variant = item.variant ?? defaultDecorationVariant[item.kind];
+      const variant = item.variant ?? getDefaultDecorationVariant(item.kind, biotope);
       if (item.kind === "Plante") {
         const plant = new THREE.Group();
         plant.userData.decorationId = item.id;
@@ -363,7 +383,7 @@ function App() {
           plant.add(foliage);
         }
         plant.scale.setScalar(sizeScale);
-        plant.position.set(x, floorY + 0.1, z);
+        plant.position.set(x, floorY + 0.1 + verticalOffset, z);
         scene.add(plant);
         decorationObjects.push(plant);
       } else if (item.kind === "Cachette") {
@@ -393,7 +413,7 @@ function App() {
         }
         hide.add(entrance);
         hide.scale.setScalar(sizeScale);
-        hide.position.set(x, floorY + 0.1, z);
+        hide.position.set(x, floorY + 0.1 + verticalOffset, z);
         scene.add(hide);
         decorationObjects.push(hide);
       } else {
@@ -404,7 +424,7 @@ function App() {
         );
         const rockScale = variant === "Stratifiée" ? [1.35, 0.48, 1.1] : isPebble ? [1.25, 0.72, 0.95] : [1.2, 0.82, 0.95];
         rock.scale.set(rockScale[0] * sizeScale, rockScale[1] * sizeScale, rockScale[2] * sizeScale);
-        rock.position.set(x, floorY + 0.28, z);
+        rock.position.set(x, floorY + 0.28 + verticalOffset, z);
         rock.userData.decorationId = item.id;
         scene.add(rock);
         decorationObjects.push(rock);
@@ -475,7 +495,8 @@ function App() {
     const onPointerUp = (event: PointerEvent) => {
       if (!draggedObject || draggedId === null) return;
       const id = draggedId;
-      const position = { x: draggedObject.position.x / widthHalf, z: draggedObject.position.z / depthHalf };
+      const previousPosition = decorations.find((item) => item.id === id)?.position;
+      const position = { ...previousPosition, x: draggedObject.position.x / widthHalf, z: draggedObject.position.z / depthHalf };
       draggedObject = null;
       draggedId = null;
       controls.enabled = true;
@@ -533,17 +554,33 @@ function App() {
     }
   };
 
+  const updateSpecies = (speciesLabel: string) => {
+    const nextSpecies = speciesList.find((item) => item.label === speciesLabel) ?? speciesList[0];
+    const nextBiotope = resolveBiotopeSelection(nextSpecies, biotope);
+    setSpecies(speciesLabel);
+    if (nextBiotope !== biotope) {
+      setBiotope(nextBiotope);
+      setSaveFeedback(`Biotope adapté : ${nextBiotope}`);
+      window.setTimeout(() => setSaveFeedback(""), 2200);
+    }
+  };
+
+  const updateBiotope = (nextBiotope: Biotope) => {
+    if (getBiotopeGuidance(selectedSpecies, nextBiotope).status === "incompatible") return;
+    setBiotope(nextBiotope);
+  };
+
   const addDecoration = (kind: Decoration["kind"]) => {
     setDecorations((current) => {
       const column = current.length % 4;
       const row = Math.floor(current.length / 4);
       const position = { x: (column - 1.5) * 0.32, z: row % 2 === 0 ? -0.45 : 0.45 };
-      return [...current, { id: nextId, kind, variant: defaultDecorationVariant[kind], position }];
+      return [...current, { id: nextId, kind, variant: getDefaultDecorationVariant(kind, biotope), position }];
     });
     setNextId((current) => current + 1);
   };
 
-  const updateDecorationPosition = (id: number, axis: "x" | "z", value: string) => {
+  const updateDecorationPosition = (id: number, axis: DecorationAxis, value: string) => {
     const centimeters = Number(value);
     if (!Number.isFinite(centimeters)) return;
     setDecorations((current) => positionDecorationAtCm(current, id, axis, centimeters, dimensions));
@@ -729,10 +766,13 @@ function App() {
       importedName = `${importedBaseName} (importé ${duplicateIndex})`;
       duplicateIndex += 1;
     }
+    const importedSpecies = speciesList.find((item) => item.label === importedProject.species) ?? speciesList[0];
+    const importedBiotope = resolveBiotopeSelection(importedSpecies, importedProject.biotope);
     const project: StoredProject = {
       ...importedProject,
       id: globalThis.crypto.randomUUID(),
       name: importedName,
+      biotope: importedBiotope,
       dimensions: { ...importedProject.dimensions },
       lifeStage: importedProject.lifeStage ?? "adult",
       decorations: importedProject.decorations.map((item) => ({ ...item, position: { ...item.position } })),
@@ -776,17 +816,19 @@ function App() {
     setViewMode("3d");
     setSavedProjects(projects);
     setSaveStatus("saved");
-    setSaveFeedback("Projet importé");
+    setSaveFeedback(importedBiotope === importedProject.biotope ? "Projet importé" : `Biotope ajusté à ${importedBiotope} selon l’espèce`);
     window.setTimeout(() => setSaveFeedback(""), 2200);
     projectMenuRef.current?.removeAttribute("open");
   };
 
   const loadProject = (project: StoredProject) => {
+    const projectSpecies = speciesList.find((item) => item.label === project.species) ?? speciesList[0];
+    const projectBiotope = resolveBiotopeSelection(projectSpecies, project.biotope);
     lastSavedProjectRef.current = JSON.stringify(project);
     setProjectId(project.id);
     setProjectName(project.name);
     setShape(project.shape);
-    setBiotope(project.biotope);
+    setBiotope(projectBiotope);
     setDimensions(project.dimensions);
     setSpecies(project.species);
     setLifeStage(project.lifeStage ?? "adult");
@@ -806,7 +848,7 @@ function App() {
     lastSavedProjectRef.current = null;
     setProjectName("Habitat sans titre");
     setShape("Basse");
-    setBiotope("Tropical");
+    setBiotope("Désertique");
     setDimensions({ width: 120, depth: 60, height: 80 });
     setSpecies(speciesList[0].label);
     setLifeStage("adult");
@@ -822,6 +864,7 @@ function App() {
   };
 
   const selectedSpecies = speciesList.find((item) => item.label === species) ?? speciesList[0];
+  const selectedBiotopeGuidance = getBiotopeGuidance(selectedSpecies, biotope);
   const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, decorations, measurements, lifeStage });
   const checkStatusLabels: Record<CheckStatus, string> = {
     met: "Repère atteint",
@@ -908,14 +951,16 @@ function App() {
           <section className="form-section">
             <div className="section-title"><span>02</span><h2>Le biotope</h2></div>
             <div className="biotope-options" role="group" aria-label="Type de terrarium">
-              {(["Désertique", "Tropical", "Paludarium"] as Biotope[]).map((option) => (
-                <button key={option} type="button" className={`biotope-option ${biotope === option ? "selected" : ""}`} onClick={() => setBiotope(option)}>
+              {(["Désertique", "Tropical", "Paludarium"] as Biotope[]).map((option) => {
+                const guidance = getBiotopeGuidance(selectedSpecies, option);
+                return <button key={option} type="button" disabled={guidance.status === "incompatible"} title={guidance.detail} className={`biotope-option ${biotope === option ? "selected" : ""} ${guidance.status === "incompatible" ? "incompatible" : ""}`} onClick={() => updateBiotope(option)}>
                   <span className="biotope-icon">{option === "Désertique" ? <Sun size={16} /> : option === "Paludarium" ? <Waves size={16} /> : <Sprout size={16} />}</span>
                   <span>{option}</span>
                   {biotope === option && <Check size={14} className="option-check" />}
-                </button>
-              ))}
+                </button>;
+              })}
             </div>
+            <p className={`biotope-guidance ${selectedBiotopeGuidance.status}`}>{selectedBiotopeGuidance.detail}</p>
           </section>
 
           <section className="form-section decor-section">
@@ -927,21 +972,26 @@ function App() {
             </div>
             <p className="decor-variant-note">Variantes visuelles uniquement; vérifiez la compatibilité des matériaux avec l’espèce.</p>
             <div className="decor-list">
-              {positionedDecorations.map((item, index) => (
-                <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
+              {positionedDecorations.map((item, index) => {
+                const selectedVariant = item.variant ?? getDefaultDecorationVariant(item.kind, biotope);
+                const variantOptions = getDecorationVariantsForBiotope(item.kind, biotope);
+                const variantIsSuggested = variantOptions.includes(selectedVariant);
+                return <div className={`decor-item ${selectedDecorationId === item.id ? "selected" : ""}`} key={item.id}>
                   <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={14} /> : item.kind === "Cachette" ? <Expand size={14} /> : <span className="rock-icon" />}</span>
                   <div className="decor-editor">
-                    <div className="decor-item-heading"><span>{item.kind} · {item.variant ?? defaultDecorationVariant[item.kind]} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">Paroi proche {item.nearestWallCm} cm</small></div>
-                    <label className="decor-variant-control"><span>Type</span><select aria-label={`Type de ${item.kind}`} value={item.variant ?? defaultDecorationVariant[item.kind]} onChange={(event) => updateDecorationVariantChoice(item.id, event.target.value)}>{decorationVariants[item.kind].map((option) => <option key={option}>{option}</option>)}</select></label>
+                    <div className="decor-item-heading"><span>{item.kind} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">Paroi proche {item.nearestWallCm} cm</small></div>
+                    <label className="decor-variant-control"><span>Type</span><select aria-label={`Type de ${item.kind}`} value={selectedVariant} onChange={(event) => updateDecorationVariantChoice(item.id, event.target.value)}>{!variantIsSuggested && <option value={selectedVariant}>{selectedVariant} · non proposé pour {biotope.toLowerCase()}</option>}{variantOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+                    {item.kind === "Plante" && <small className={`plant-variant-note ${variantIsSuggested ? "" : "not-suggested"}`}>{variantIsSuggested ? "Style visuel uniquement; vérifiez l’espèce botanique." : `Style non proposé pour le biotope ${biotope.toLowerCase()}.`}</small>}
                     <div className="decor-coordinate-grid">
                       <label><span>X · gauche</span><input type="number" min="0" max={dimensions.width} step="1" aria-label={`Position X de ${item.kind} en centimètres`} value={item.xCm} onChange={(event) => updateDecorationPosition(item.id, "x", event.target.value)} /></label>
                       <label><span>Z · haut</span><input type="number" min="0" max={dimensions.depth} step="1" aria-label={`Position Z de ${item.kind} en centimètres`} value={item.zCm} onChange={(event) => updateDecorationPosition(item.id, "z", event.target.value)} /></label>
+                      <label><span>Y · hauteur</span><input type="number" min="0" max={dimensions.height} step="1" aria-label={`Hauteur Y de ${item.kind} en centimètres`} value={item.yCm} onChange={(event) => updateDecorationPosition(item.id, "y", event.target.value)} /></label>
                     </div>
                     <label className="decor-size-control"><span>Taille visuelle <output>{item.size ?? 100}%</output></span><input type="range" min="50" max="150" step="10" aria-label={`Taille visuelle de ${item.kind}`} value={item.size ?? 100} onChange={(event) => updateDecorationSize(item.id, event.target.value)} /></label>
                   </div>
                   <button type="button" className="remove-button" title={`Retirer ${item.kind}`} aria-label={`Retirer ${item.kind}`} onClick={() => removeDecoration(item.id)}><X size={14} /></button>
-                </div>
-              ))}
+                </div>;
+              })}
               {decorations.length === 0 && <p className="empty-decor">Le terrarium est vide pour le moment.</p>}
             </div>
           </section>
@@ -950,7 +1000,7 @@ function App() {
             <div className="section-title"><span>04</span><h2>Son habitant</h2></div>
             <label className="species-select-wrap">
               <span className="sr-only">Espèce de reptile ou amphibien</span>
-              <select value={species} onChange={(event) => setSpecies(event.target.value)}>
+              <select value={species} onChange={(event) => updateSpecies(event.target.value)}>
                 {speciesList.map((item) => <option key={item.label}>{item.label}</option>)}
               </select>
               <ChevronDown size={15} />
@@ -1045,7 +1095,7 @@ function App() {
               <h4>Décor à prévoir</h4>
               {decorationCounts.length === 0 ? <p className="report-no-decor">Aucun élément de décor placé.</p> : <>
                 <div className="report-material-counts">{decorationCounts.map((item) => <span key={item.kind}>{item.kind} <strong>× {item.count}</strong></span>)}</div>
-                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={13} /> : <span className="rock-icon" />}</span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? defaultDecorationVariant[item.kind]}</strong><small>X {item.xCm} cm depuis la gauche · Z {item.zCm} cm depuis le haut · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
+                <ul className="report-material-list">{positionedDecorations.map((item, index) => <li key={item.id}><span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={13} /> : item.kind === "Cachette" ? <Expand size={13} /> : <span className="rock-icon" />}</span><span><strong>{item.kind} {String(index + 1).padStart(2, "0")} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)}</strong><small>X {item.xCm} cm depuis la gauche · Y {item.yCm} cm au-dessus du fond · Z {item.zCm} cm depuis le haut · taille visuelle {item.size ?? 100}% · paroi proche {item.nearestWallCm} cm</small></span></li>)}</ul>
               </>}
             </section>
             <h3>Critères et relevés</h3>

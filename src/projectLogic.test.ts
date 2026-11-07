@@ -3,12 +3,16 @@ import {
   calculateProjectChecks,
   defaultDecorationVariant,
   decorationVariants,
+  getBiotopeGuidance,
+  getDecorationVariantsForBiotope,
+  getDefaultDecorationVariant,
   isStoredProject,
   measureDecorationPlacement,
   parseProjectExport,
   positionDecorationAtCm,
   PROJECT_EXPORT_FORMAT,
   removeSavedProjectRecord,
+  resolveBiotopeSelection,
   resizeDecoration,
   renameSavedProjectRecord,
   updateDecorationVariant,
@@ -89,6 +93,7 @@ describe("project export validation", () => {
     ["unknown species", { ...projectExport, project: { ...project, species: "Unknown species" } }],
     ["oversized dimensions", { ...projectExport, project: { ...project, dimensions: { ...project.dimensions, width: 1001 } } }],
     ["position outside terrarium", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], position: { x: 1.1, z: 0 } }] } }],
+    ["height above terrarium", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], position: { x: 0, y: 1.1, z: 0 } }] } }],
     ["decoration size outside supported range", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], size: 151 }] } }],
     ["variant incompatible with decoration kind", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], kind: "Plante", variant: "Grotte" }] } }],
     ["duplicate decoration IDs", { ...projectExport, project: { ...project, decorations: [project.decorations[0], { ...project.decorations[1], id: project.decorations[0].id }] } }],
@@ -176,19 +181,28 @@ describe("project checks", () => {
 
 describe("dimensioned plan placement", () => {
   it("converts normalized positions to centimetres and nearest-wall distance", () => {
-    expect(measureDecorationPlacement(project.decorations, { width: 120, depth: 60 })).toEqual([
-      { ...project.decorations[0], xCm: 30, zCm: 30, nearestWallCm: 30 },
-      { ...project.decorations[1], xCm: 90, zCm: 30, nearestWallCm: 30 },
+    expect(measureDecorationPlacement(project.decorations, { width: 120, depth: 60, height: 80 })).toEqual([
+      { ...project.decorations[0], xCm: 30, yCm: 0, zCm: 30, nearestWallCm: 30 },
+      { ...project.decorations[1], xCm: 90, yCm: 0, zCm: 30, nearestWallCm: 30 },
     ]);
   });
 
   it("sets a decoration position in centimetres and clamps it to the edge", () => {
     const decoration = project.decorations[0];
-    const positioned = positionDecorationAtCm([decoration], decoration.id, "x", 30, { width: 120, depth: 60 });
+    const positioned = positionDecorationAtCm([decoration], decoration.id, "x", 30, { width: 120, depth: 60, height: 80 });
 
     expect(positioned[0].position.x).toBe(-0.5);
-    expect(measureDecorationPlacement(positioned, { width: 120, depth: 60 })[0].xCm).toBe(30);
-    expect(positionDecorationAtCm([decoration], decoration.id, "x", 500, { width: 120, depth: 60 })[0].position.x).toBe(1);
+    expect(measureDecorationPlacement(positioned, { width: 120, depth: 60, height: 80 })[0].xCm).toBe(30);
+    expect(positionDecorationAtCm([decoration], decoration.id, "x", 500, { width: 120, depth: 60, height: 80 })[0].position.x).toBe(1);
+  });
+
+  it("supports vertical stacking and clamps it to the ceiling", () => {
+    const decoration = project.decorations[0];
+    const elevated = positionDecorationAtCm([decoration], decoration.id, "y", 40, { width: 120, depth: 60, height: 80 });
+
+    expect(elevated[0].position.y).toBe(0.5);
+    expect(measureDecorationPlacement(elevated, { width: 120, depth: 60, height: 80 })[0].yCm).toBe(40);
+    expect(positionDecorationAtCm([decoration], decoration.id, "y", 100, { width: 120, depth: 60, height: 80 })[0].position.y).toBe(1);
   });
 
   it("clamps visual size changes to 50–150 percent", () => {
@@ -211,6 +225,35 @@ describe("dimensioned plan placement", () => {
     expect(updateDecorationVariant(decorations, rock.id, "Galet")[1].variant).toBe("Galet");
     expect(updateDecorationVariant(decorations, hide.id, "Tronc creux")[2].variant).toBe("Tronc creux");
     expect(updateDecorationVariant(decorations, plant.id, "Grotte")).toBe(decorations);
+  });
+
+  it("suggests different plant styles by biotope without changing non-plant variants", () => {
+    expect(getDecorationVariantsForBiotope("Plante", "Désertique")).toEqual(["Rosette"]);
+    expect(getDecorationVariantsForBiotope("Plante", "Tropical")).toContain("Fougère");
+    expect(getDecorationVariantsForBiotope("Plante", "Paludarium")).not.toEqual(getDecorationVariantsForBiotope("Plante", "Désertique"));
+    expect(getDecorationVariantsForBiotope("Roche", "Désertique")).toEqual(decorationVariants.Roche);
+    expect(getDefaultDecorationVariant("Plante", "Désertique")).toBe("Rosette");
+  });
+});
+
+describe("biotope compatibility", () => {
+  const sourcedPogona: SpeciesProfile = {
+    ...pogona,
+    biotopeGuidance: {
+      Désertique: { status: "compatible", detail: "Habitat sec." },
+      Tropical: { status: "incompatible", detail: "Humidité hors profil." },
+      Paludarium: { status: "incompatible", detail: "Configuration humide." },
+    },
+  };
+
+  it("blocks known incompatible biotopes and selects the compatible alternative", () => {
+    expect(getBiotopeGuidance(sourcedPogona, "Tropical").status).toBe("incompatible");
+    expect(resolveBiotopeSelection(sourcedPogona, "Paludarium")).toBe("Désertique");
+  });
+
+  it("keeps undocumented combinations as unknown and selectable", () => {
+    expect(getBiotopeGuidance(pogona, "Paludarium").status).toBe("unknown");
+    expect(resolveBiotopeSelection(pogona, "Paludarium")).toBe("Paludarium");
   });
 });
 

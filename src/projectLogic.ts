@@ -1,6 +1,8 @@
 export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
 export type LifeStage = "juvenile" | "adult";
+export type BiotopeCompatibilityStatus = "compatible" | "incompatible" | "unknown";
+export type BiotopeGuidance = { status: BiotopeCompatibilityStatus; detail: string };
 export const decorationVariants = {
   Plante: ["Feuillage dense", "Fougère", "Rosette"],
   Roche: ["Roche anguleuse", "Galet", "Stratifiée"],
@@ -13,9 +15,14 @@ export const defaultDecorationVariant: Record<DecorationKind, DecorationVariant>
   Roche: "Roche anguleuse",
   Cachette: "Grotte",
 };
-export type Decoration = { id: number; kind: DecorationKind; variant?: DecorationVariant; position: { x: number; z: number }; size?: number };
-export type DecorationAxis = "x" | "z";
-export type PositionedDecoration = Decoration & { xCm: number; zCm: number; nearestWallCm: number };
+export const plantStylesByBiotope: Record<Biotope, readonly Extract<DecorationVariant, "Feuillage dense" | "Fougère" | "Rosette">[]> = {
+  Désertique: ["Rosette"],
+  Tropical: ["Feuillage dense", "Fougère"],
+  Paludarium: ["Feuillage dense", "Fougère"],
+};
+export type Decoration = { id: number; kind: DecorationKind; variant?: DecorationVariant; position: { x: number; y?: number; z: number }; size?: number };
+export type DecorationAxis = "x" | "y" | "z";
+export type PositionedDecoration = Decoration & { xCm: number; yCm: number; zCm: number; nearestWallCm: number };
 export type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
 export type Measurements = { hotSideTemperature: number | null; coolSideTemperature: number | null; baskingUvi: number | null; coolSideHumidity: number | null };
 export type MeasurementKey = keyof Measurements;
@@ -30,6 +37,7 @@ export type SpeciesProfile = {
   minimumDimensions: { width: number; depth: number; height: number } | null;
   referenceRanges: ReferenceRanges | null;
   hidesAtBothEnds: boolean | null;
+  biotopeGuidance?: Partial<Record<Biotope, BiotopeGuidance>>;
 };
 export type StoredProject = {
   id: string;
@@ -62,9 +70,27 @@ export type ProjectCheckInput = {
 
 export const PROJECT_EXPORT_FORMAT = "terrarium-studio-project";
 
+export function getBiotopeGuidance(species: Pick<SpeciesProfile, "biotopeGuidance">, biotope: Biotope): BiotopeGuidance {
+  return species.biotopeGuidance?.[biotope] ?? { status: "unknown", detail: "Compatibilité non documentée par une source vérifiée." };
+}
+
+export function resolveBiotopeSelection(species: SpeciesProfile, requestedBiotope: Biotope): Biotope {
+  if (getBiotopeGuidance(species, requestedBiotope).status !== "incompatible") return requestedBiotope;
+  const biotopes: Biotope[] = ["Désertique", "Tropical", "Paludarium"];
+  return biotopes.find((biotope) => getBiotopeGuidance(species, biotope).status === "compatible") ?? requestedBiotope;
+}
+
+export function getDecorationVariantsForBiotope(kind: DecorationKind, biotope: Biotope): readonly DecorationVariant[] {
+  return kind === "Plante" ? plantStylesByBiotope[biotope] : decorationVariants[kind];
+}
+
+export function getDefaultDecorationVariant(kind: DecorationKind, biotope: Biotope): DecorationVariant {
+  return kind === "Plante" ? plantStylesByBiotope[biotope][0] : defaultDecorationVariant[kind];
+}
+
 export function measureDecorationPlacement(
   decorations: Decoration[],
-  dimensions: { width: number; depth: number },
+  dimensions: { width: number; depth: number; height: number },
 ): PositionedDecoration[] {
   return decorations.map((item) => {
     const x = (item.position.x + 1) * dimensions.width / 2;
@@ -72,6 +98,7 @@ export function measureDecorationPlacement(
     return {
       ...item,
       xCm: Math.round(x),
+      yCm: Math.round((item.position.y ?? 0) * dimensions.height),
       zCm: Math.round(z),
       nearestWallCm: Math.round(Math.min(x, dimensions.width - x, z, dimensions.depth - z)),
     };
@@ -83,12 +110,12 @@ export function positionDecorationAtCm(
   id: number,
   axis: DecorationAxis,
   centimeters: number,
-  dimensions: { width: number; depth: number },
+  dimensions: { width: number; depth: number; height: number },
 ): Decoration[] {
-  const axisLength = axis === "x" ? dimensions.width : dimensions.depth;
+  const axisLength = axis === "x" ? dimensions.width : axis === "y" ? dimensions.height : dimensions.depth;
   if (!Number.isFinite(centimeters) || !Number.isFinite(axisLength) || axisLength <= 0) return decorations;
   const clampedCentimeters = Math.min(axisLength, Math.max(0, centimeters));
-  const normalizedPosition = clampedCentimeters * 2 / axisLength - 1;
+  const normalizedPosition = axis === "y" ? clampedCentimeters / axisLength : clampedCentimeters * 2 / axisLength - 1;
   return decorations.map((item) => item.id === id
     ? { ...item, position: { ...item.position, [axis]: normalizedPosition } }
     : item);
@@ -122,11 +149,13 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
     const isValidKind = ["Plante", "Cachette", "Roche"].includes(decoration.kind as string);
     const allowedVariants: readonly string[] = isValidKind ? decorationVariants[decoration.kind as DecorationKind] : [];
     const isValidVariant = decoration.variant === undefined || (typeof decoration.variant === "string" && allowedVariants.includes(decoration.variant));
-    return Number.isInteger(decoration.id) &&
-      isValidKind && isValidVariant &&
-      typeof position === "object" && position !== null &&
+    const isValidPosition = typeof position === "object" && position !== null &&
       typeof (position as Record<string, unknown>).x === "number" &&
       typeof (position as Record<string, unknown>).z === "number" &&
+      ((position as Record<string, unknown>).y === undefined || (typeof (position as Record<string, unknown>).y === "number" && Number.isFinite((position as Record<string, unknown>).y) && (position as Record<string, number>).y >= 0 && (position as Record<string, number>).y <= 1));
+    return Number.isInteger(decoration.id) &&
+      isValidKind && isValidVariant &&
+      isValidPosition &&
       (decoration.size === undefined || (typeof decoration.size === "number" && Number.isFinite(decoration.size) && decoration.size >= 50 && decoration.size <= 150));
   });
   const measurements = project.measurements;
@@ -157,7 +186,7 @@ export function parseProjectExport(value: unknown, allowedSpecies: readonly stri
   const dimensions = [project.dimensions.width, project.dimensions.depth, project.dimensions.height];
   const decorationIds = project.decorations.map((item) => item.id);
   const validDimensions = dimensions.every((dimension) => dimension >= 0 && dimension <= 1000);
-  const validPositions = project.decorations.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.z) && Math.abs(item.position.x) <= 1 && Math.abs(item.position.z) <= 1);
+  const validPositions = project.decorations.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.z) && Math.abs(item.position.x) <= 1 && Math.abs(item.position.z) <= 1 && (item.position.y === undefined || (Number.isFinite(item.position.y) && item.position.y >= 0 && item.position.y <= 1)));
   const validIds = decorationIds.every((id) => id > 0) && new Set(decorationIds).size === decorationIds.length && project.nextId > Math.max(0, ...decorationIds);
   if (!validDimensions || !validPositions || !validIds || !project.name.trim() || project.name.length > 60) return null;
   return project;
