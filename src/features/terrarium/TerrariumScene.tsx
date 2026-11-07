@@ -67,6 +67,32 @@ function createContactShadowTexture() {
   return texture;
 }
 
+function createSubstrateTexture() {
+  const size = 128;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      let noise = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263);
+      noise = Math.imul(noise ^ (noise >>> 13), 1274126177);
+      noise = (noise ^ (noise >>> 16)) >>> 0;
+      const tone = 222 + noise % 29;
+      const index = (y * size + x) * 4;
+      data[index] = tone;
+      data[index + 1] = tone;
+      data[index + 2] = tone;
+      data[index + 3] = 255;
+    }
+  }
+
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const cameraViewRef = useRef<CameraViewState | null>(null);
@@ -91,6 +117,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#e9ede4");
     const contactShadowTexture = createContactShadowTexture();
+    const substrateTexture = createSubstrateTexture();
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
     const previousView = cameraViewRef.current?.viewMode === viewMode ? cameraViewRef.current : null;
     if (viewMode === "plan") {
@@ -163,7 +190,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       depthWrite: false,
     });
     const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x414f43, roughness: 0.36 });
-    const groundMaterial = new THREE.MeshStandardMaterial({ color: colors.ground, roughness: 0.94 });
+    const groundMaterial = new THREE.MeshStandardMaterial({ color: colors.ground, map: substrateTexture, bumpMap: substrateTexture, bumpScale: 0.018, roughness: 0.92 });
     const widthHalf = width / 2;
     const depthHalf = depth / 2;
 
@@ -684,6 +711,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         }
       });
       contactShadowTexture?.dispose();
+      substrateTexture.dispose();
     };
   }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
 
