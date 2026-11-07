@@ -135,7 +135,6 @@ h1, h2, p { margin-top: 0; }
 .remove-button { justify-self: center; border: 0; background: transparent; color: #abb3aa; padding: 4px; display: grid; place-items: center; cursor: pointer; }
 .remove-button:hover { color: #8d5f4f; }
 .empty-decor { color: #a0a99f; font-size: 10px; padding: 5px 0 0; margin: 0; }
-.species-section { border-bottom: 0; padding-bottom: 4px; }
 .species-select-wrap { display: block; position: relative; }
 .species-select-wrap select { appearance: none; width: 100%; border: 1px solid #e2e7de; border-radius: 4px; padding: 10px 28px 10px 9px; color: #4a594d; background: #fff; font-size: 9px; }
 .species-select-wrap > svg { position: absolute; right: 9px; top: 10px; color: #8c988d; pointer-events: none; }

@@ -735,8 +735,38 @@ function App() {
             <span className="step-count">01 <span>/ 04</span></span>
           </div>
 
+          <section className="form-section species-section">
+            <div className="section-title"><span>01</span><h2>Son habitant</h2></div>
+            <label className="species-select-wrap">
+              <span className="sr-only">Espèce de reptile ou amphibien</span>
+              <select value={species} onChange={(event) => updateSpecies(event.target.value)}>
+                {speciesList.map((item) => <option key={item.label}>{item.label}</option>)}
+              </select>
+              <ChevronDown size={15} />
+            </label>
+            <div className="life-stage-control" role="group" aria-label="Stade de vie">
+              <span>Stade de vie</span>
+              <div className="life-stage-options">
+                {(["hatchling", "juvenile", "adult"] as LifeStage[]).map((stage) => <button key={stage} type="button" className={lifeStage === stage ? "active" : ""} aria-pressed={lifeStage === stage} onClick={() => setLifeStage(stage)}>{getLifeStageLabel(stage)}</button>)}
+              </div>
+            </div>
+            <p className="species-note"><CircleHelp size={13} /> {lifeStage !== "adult" && !selectedStageProfile.minimumDimensions && !selectedStageProfile.referenceRanges ? `Repères d’habitat ${getLifeStageLabel(lifeStage).toLowerCase()} non documentés; les seuils adultes ne sont pas appliqués.` : selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
+            {selectedStageProfile.stageGuidance && <div className="stage-guidance"><p className="field-label">Repère alimentaire · {selectedSpecies.source?.publisher}</p><p>{selectedStageProfile.stageGuidance}</p></div>}
+            {selectedSpecies.referenceRanges && <div className="measurement-form">
+              <p className="field-label">Mesures relevées <small>optionnel</small></p>
+              <div className="measurement-grid">
+                <label><span>Zone chaude · °C</span><input aria-label="Température zone chaude en degrés" type="number" step="0.1" value={measurements.hotSideTemperature ?? ""} onChange={(event) => updateMeasurement("hotSideTemperature", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
+                <label><span>Zone fraîche · °C</span><input aria-label="Température zone fraîche en degrés" type="number" step="0.1" value={measurements.coolSideTemperature ?? ""} onChange={(event) => updateMeasurement("coolSideTemperature", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
+                <label><span>UVI · basking</span><input aria-label="Indice UVB UVI dans la zone de basking" type="number" min="0" step="0.1" value={measurements.baskingUvi ?? ""} onChange={(event) => updateMeasurement("baskingUvi", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
+                <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
+              </div>
+              <p className="measurement-note">{selectedStageProfile.referenceRanges ? `Repères ${selectedSpecies.source?.publisher} pour ${getLifeStageLabel(lifeStage).toLowerCase()}; températures en °C converties si nécessaire.` : `Aucune plage de mesure chiffrée vérifiée pour ${getLifeStageLabel(lifeStage).toLowerCase()}; les relevés ne sont pas comparés.`} Mesurez chaque zone séparément.</p>
+              {selectedStageProfile.environmentGuidance && <p className="measurement-note">{selectedStageProfile.environmentGuidance}</p>}
+            </div>}
+          </section>
+
           <section className="form-section">
-            <div className="section-title"><span>01</span><h2>Le contenant</h2></div>
+            <div className="section-title"><span>02</span><h2>Le contenant</h2></div>
             <p className="field-label">Format du terrarium</p>
             <div className="shape-options" role="group" aria-label="Format du terrarium">
               {(["Basse", "Cubique", "Verticale"] as Shape[]).map((option) => (
@@ -760,7 +790,7 @@ function App() {
           </section>
 
           <section className="form-section">
-            <div className="section-title"><span>02</span><h2>Le biotope</h2></div>
+            <div className="section-title"><span>03</span><h2>Le biotope</h2></div>
             <div className="biotope-options" role="group" aria-label="Type de terrarium">
               {(["Désertique", "Tropical", "Paludarium"] as Biotope[]).map((option) => {
                 const guidance = getBiotopeGuidance(selectedSpecies, option);
@@ -792,36 +822,6 @@ function App() {
             onUpdatePlantSpecies={updateBotanicalPlant}
             onFinishNumericEdit={finishProjectHistoryGroup}
           />
-
-          <section className="form-section species-section">
-            <div className="section-title"><span>04</span><h2>Son habitant</h2></div>
-            <label className="species-select-wrap">
-              <span className="sr-only">Espèce de reptile ou amphibien</span>
-              <select value={species} onChange={(event) => updateSpecies(event.target.value)}>
-                {speciesList.map((item) => <option key={item.label}>{item.label}</option>)}
-              </select>
-              <ChevronDown size={15} />
-            </label>
-            <div className="life-stage-control" role="group" aria-label="Stade de vie">
-              <span>Stade de vie</span>
-              <div className="life-stage-options">
-                {(["hatchling", "juvenile", "adult"] as LifeStage[]).map((stage) => <button key={stage} type="button" className={lifeStage === stage ? "active" : ""} aria-pressed={lifeStage === stage} onClick={() => setLifeStage(stage)}>{getLifeStageLabel(stage)}</button>)}
-              </div>
-            </div>
-            <p className="species-note"><CircleHelp size={13} /> {lifeStage !== "adult" && !selectedStageProfile.minimumDimensions && !selectedStageProfile.referenceRanges ? `Repères d’habitat ${getLifeStageLabel(lifeStage).toLowerCase()} non documentés; les seuils adultes ne sont pas appliqués.` : selectedSpecies.source ? "Les critères incomplets restent à vérifier." : "Aucune source de maintenance vérifiée pour cette espèce."}</p>
-            {selectedStageProfile.stageGuidance && <div className="stage-guidance"><p className="field-label">Repère alimentaire · {selectedSpecies.source?.publisher}</p><p>{selectedStageProfile.stageGuidance}</p></div>}
-            {selectedSpecies.referenceRanges && <div className="measurement-form">
-              <p className="field-label">Mesures relevées <small>optionnel</small></p>
-              <div className="measurement-grid">
-                <label><span>Zone chaude · °C</span><input aria-label="Température zone chaude en degrés" type="number" step="0.1" value={measurements.hotSideTemperature ?? ""} onChange={(event) => updateMeasurement("hotSideTemperature", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
-                <label><span>Zone fraîche · °C</span><input aria-label="Température zone fraîche en degrés" type="number" step="0.1" value={measurements.coolSideTemperature ?? ""} onChange={(event) => updateMeasurement("coolSideTemperature", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
-                <label><span>UVI · basking</span><input aria-label="Indice UVB UVI dans la zone de basking" type="number" min="0" step="0.1" value={measurements.baskingUvi ?? ""} onChange={(event) => updateMeasurement("baskingUvi", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
-                <label><span>Humidité · %</span><input aria-label="Humidité côté frais en pourcentage" type="number" min="0" max="100" step="1" value={measurements.coolSideHumidity ?? ""} onChange={(event) => updateMeasurement("coolSideHumidity", event.target.value)} onBlur={finishProjectHistoryGroup} /></label>
-              </div>
-              <p className="measurement-note">{selectedStageProfile.referenceRanges ? `Repères ${selectedSpecies.source?.publisher} pour ${getLifeStageLabel(lifeStage).toLowerCase()}; températures en °C converties si nécessaire.` : `Aucune plage de mesure chiffrée vérifiée pour ${getLifeStageLabel(lifeStage).toLowerCase()}; les relevés ne sont pas comparés.`} Mesurez chaque zone séparément.</p>
-              {selectedStageProfile.environmentGuidance && <p className="measurement-note">{selectedStageProfile.environmentGuidance}</p>}
-            </div>}
-          </section>
         </aside>
 
         <section className="stage-column" aria-label="Visualisation 3D">

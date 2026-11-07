@@ -33,6 +33,9 @@ test("a named checkpoint survives reload and restores the project", async ({ pag
 
 test("a crested gecko hatchling uses its sourced stage profile", async ({ page }) => {
   await page.goto("/");
+  const workflowSections = page.locator(".left-panel > .form-section");
+  await expect(workflowSections.nth(0).locator(".section-title h2")).toHaveText("Son habitant");
+  await expect(workflowSections.nth(1).locator(".section-title h2")).toHaveText("Le contenant");
   await page.getByLabel("Espèce de reptile ou amphibien").selectOption({ label: "Correlophus ciliatus · Gecko à crête" });
 
   const stages = page.getByRole("group", { name: "Stade de vie" });

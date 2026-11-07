@@ -83,7 +83,7 @@ export function DecorationPanel({
 
   return (
     <section className="form-section decor-section">
-      <div className="section-title"><span>03</span><h2>Le décor</h2><span className="count-pill">{decorations.length}</span></div>
+      <div className="section-title"><span>04</span><h2>Le décor</h2><span className="count-pill">{decorations.length}</span></div>
       <div className="decor-tools">
         <button type="button" onClick={() => onAddDecoration("Plante")}><Plus size={14} /><Leaf size={15} /> Plante</button>
         <button type="button" onClick={() => onAddDecoration("Cachette")}><Plus size={14} /><Expand size={14} /> Cachette</button>
