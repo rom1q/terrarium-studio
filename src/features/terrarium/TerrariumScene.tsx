@@ -44,6 +44,29 @@ function getPlantProfile(id: string | undefined) {
   return id ? plantCatalog.find((plant) => plant.id === id) : undefined;
 }
 
+function createContactShadowTexture() {
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const distance = Math.hypot((x + 0.5 - size / 2) / (size / 2), (y + 0.5 - size / 2) / (size / 2));
+      const alpha = Math.pow(Math.max(0, 1 - distance), 1.8) * 190;
+      const index = (y * size + x) * 4;
+      data[index] = 255;
+      data[index + 1] = 255;
+      data[index + 2] = 255;
+      data[index + 3] = alpha;
+    }
+  }
+
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const cameraViewRef = useRef<CameraViewState | null>(null);
@@ -67,6 +90,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#e9ede4");
+    const contactShadowTexture = createContactShadowTexture();
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
     const previousView = cameraViewRef.current?.viewMode === viewMode ? cameraViewRef.current : null;
     if (viewMode === "plan") {
@@ -85,13 +109,27 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.replaceChildren(renderer.domElement);
 
-    scene.add(new THREE.HemisphereLight(0xfff8e9, 0x65745c, 2.1));
-    const keyLight = new THREE.DirectionalLight(0xffedc8, 3.2);
+    scene.add(new THREE.HemisphereLight(0xfff8e9, 0x65745c, 0.7));
+    const keyLight = new THREE.DirectionalLight(0xffedc8, 3.4);
     keyLight.position.set(-3, 7, 5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.left = -3.5;
+    keyLight.shadow.camera.right = 3.5;
+    keyLight.shadow.camera.top = 4;
+    keyLight.shadow.camera.bottom = -2.5;
+    keyLight.shadow.camera.near = 0.1;
+    keyLight.shadow.camera.far = 20;
+    keyLight.shadow.camera.updateProjectionMatrix();
+    keyLight.shadow.bias = -0.00015;
+    keyLight.shadow.normalBias = 0.003;
+    keyLight.shadow.radius = 2;
     scene.add(keyLight);
-    const fillLight = new THREE.DirectionalLight(0xc5e0d1, 1.3);
+    const fillLight = new THREE.DirectionalLight(0xc5e0d1, 0.25);
     fillLight.position.set(5, 3, -4);
     scene.add(fillLight);
 
@@ -131,6 +169,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
 
     const floor = new THREE.Mesh(new THREE.BoxGeometry(width, 0.2, depth), groundMaterial);
     floor.position.y = floorY;
+    floor.receiveShadow = true;
     scene.add(floor);
 
     if (biotope === "Paludarium") {
@@ -156,6 +195,8 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     const addBeam = (beamWidth: number, beamHeight: number, beamDepth: number, x: number, y: number, z: number) => {
       const beam = new THREE.Mesh(new THREE.BoxGeometry(beamWidth, beamHeight, beamDepth), frameMaterial);
       beam.position.set(x, y, z);
+      beam.castShadow = true;
+      beam.receiveShadow = true;
       scene.add(beam);
     };
     const rail = 0.045;
@@ -327,7 +368,30 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         decorationObjects.push(rock);
         decorationObjectsById.set(item.id, rock);
       }
+      if (item.kind !== "Lampe chauffante" && item.kind !== "Tube UVB") {
+        const shadow = new THREE.Mesh(
+          new THREE.PlaneGeometry(
+            Math.max(0.32, geometryProfile.bounds.halfWidth * 1.7 * sizeScale),
+            Math.max(0.32, geometryProfile.bounds.halfDepth * 1.7 * sizeScale),
+          ),
+          new THREE.MeshBasicMaterial({
+            color: 0x453b2f,
+            map: contactShadowTexture,
+            transparent: true,
+            opacity: 0.62,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          }),
+        );
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.set(x, floorY + 0.106, z);
+        shadow.renderOrder = 1;
+        scene.add(shadow);
+      }
     });
+    decorationObjects.forEach((object) => object.traverse((part) => {
+      if (part instanceof THREE.Mesh) part.castShadow = true;
+    }));
 
     const backgroundGrid = new THREE.GridHelper(12, 24, 0xadb8aa, 0xcbd1c7);
     backgroundGrid.position.y = -0.02;
@@ -619,6 +683,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
           materials.forEach((material) => material.dispose());
         }
       });
+      contactShadowTexture?.dispose();
     };
   }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
 
