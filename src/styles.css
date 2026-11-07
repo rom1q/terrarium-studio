@@ -102,6 +102,11 @@ h1, h2, p { margin-top: 0; }
 .decor-item-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; }
 .decor-item-heading > span { min-width: 0; color: #56655a; font-size: 10px; }
 .decor-item-heading .decor-position { flex: 0 0 auto; font-size: 8px; }
+.transform-tools { display: flex; align-items: center; gap: 4px; }
+.transform-tools button { display: grid; place-items: center; width: 26px; height: 24px; padding: 0; border: 1px solid #e3e8df; border-radius: 3px; background: #fff; color: #78847b; cursor: pointer; }
+.transform-tools button:hover, .transform-modes button.active { border-color: #9baa95; background: #f0f4eb; color: #49664f; }
+.transform-modes { display: flex; gap: 2px; padding: 2px; border-radius: 4px; background: #edf0e9; }
+.transform-tools .transform-delete:hover { border-color: #e7c9bd; background: #fbefeb; color: #995840; }
 .decor-variant-control { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 5px; min-width: 0; color: #89948a; font-size: 8px; }
 .decor-variant-control select { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid #e6e9e1; border-radius: 4px; background: #fff; color: #354238; font-size: 9px; }
 .decor-coordinate-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
@@ -111,6 +116,8 @@ h1, h2, p { margin-top: 0; }
 .decor-size-control > span { display: flex; justify-content: space-between; gap: 6px; }
 .decor-size-control output { color: #526553; font-weight: 600; }
 .decor-size-control input { width: 100%; height: 14px; margin: 0; accent-color: #557358; cursor: ew-resize; }
+.decor-rotation-control { display: grid; grid-template-columns: minmax(0, 1fr) 68px; align-items: center; gap: 6px; min-width: 0; color: #89948a; font-size: 8px; }
+.decor-rotation-control input { width: 100%; min-width: 0; padding: 4px 5px; border: 1px solid #e6e9e1; border-radius: 4px; background: #fff; color: #354238; font-size: 10px; }
 .viewport[data-mode="plan"] canvas { cursor: grab; touch-action: none; }
 .viewport[data-mode="plan"] canvas:active { cursor: grabbing; }
 .decor-swatch { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; }

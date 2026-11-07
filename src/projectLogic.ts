@@ -20,7 +20,7 @@ export const plantStylesByBiotope: Record<Biotope, readonly Extract<DecorationVa
   Tropical: ["Feuillage dense", "Fougère"],
   Paludarium: ["Feuillage dense", "Fougère"],
 };
-export type Decoration = { id: number; kind: DecorationKind; variant?: DecorationVariant; position: { x: number; y?: number; z: number }; size?: number };
+export type Decoration = { id: number; kind: DecorationKind; variant?: DecorationVariant; position: { x: number; y?: number; z: number }; size?: number; rotation?: number };
 export type DecorationAxis = "x" | "y" | "z";
 export type PositionedDecoration = Decoration & { xCm: number; yCm: number; zCm: number; nearestWallCm: number };
 export type SpeciesSource = { title: string; publisher: string; url: string; checkedAt: string };
@@ -127,6 +127,24 @@ export function resizeDecoration(decorations: Decoration[], id: number, size: nu
   return decorations.map((item) => item.id === id ? { ...item, size: normalizedSize } : item);
 }
 
+export function rotateDecoration(decorations: Decoration[], id: number, degrees: number): Decoration[] {
+  if (!Number.isFinite(degrees)) return decorations;
+  const rotation = ((degrees % 360) + 360) % 360;
+  return decorations.map((item) => item.id === id ? { ...item, rotation } : item);
+}
+
+export function duplicateDecoration(decorations: Decoration[], id: number, newId: number): Decoration[] {
+  const source = decorations.find((item) => item.id === id);
+  if (!source || !Number.isInteger(newId) || newId < 1 || decorations.some((item) => item.id === newId)) return decorations;
+  const offset = (coordinate: number) => coordinate >= 0.85 ? coordinate - 0.15 : coordinate + 0.15;
+  const clamp = (coordinate: number) => Math.min(1, Math.max(-1, coordinate));
+  return [...decorations, {
+    ...source,
+    id: newId,
+    position: { ...source.position, x: clamp(offset(source.position.x)), z: clamp(offset(source.position.z)) },
+  }];
+}
+
 export function updateDecorationVariant(decorations: Decoration[], id: number, variant: string): Decoration[] {
   const target = decorations.find((item) => item.id === id);
   if (!target || !decorationVariants[target.kind].some((option) => option === variant)) return decorations;
@@ -156,7 +174,8 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
     return Number.isInteger(decoration.id) &&
       isValidKind && isValidVariant &&
       isValidPosition &&
-      (decoration.size === undefined || (typeof decoration.size === "number" && Number.isFinite(decoration.size) && decoration.size >= 50 && decoration.size <= 150));
+      (decoration.size === undefined || (typeof decoration.size === "number" && Number.isFinite(decoration.size) && decoration.size >= 50 && decoration.size <= 150)) &&
+      (decoration.rotation === undefined || (typeof decoration.rotation === "number" && Number.isFinite(decoration.rotation) && decoration.rotation >= 0 && decoration.rotation < 360));
   });
   const measurements = project.measurements;
   const isValidLifeStage = project.lifeStage === undefined || project.lifeStage === "juvenile" || project.lifeStage === "adult";

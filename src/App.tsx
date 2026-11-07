@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
 import {
   AlertTriangle,
   Check,
   ChevronDown,
   CircleHelp,
+  Copy,
   Download,
   Expand,
   Eye,
   FileText,
   Leaf,
+  Move,
   Plus,
   Pencil,
   Printer,
@@ -26,6 +29,7 @@ import {
 } from "lucide-react";
 import {
   calculateProjectChecks,
+  duplicateDecoration,
   getBiotopeGuidance,
   getDecorationVariantsForBiotope,
   getDefaultDecorationVariant,
@@ -37,6 +41,7 @@ import {
   resolveBiotopeSelection,
   removeSavedProjectRecord,
   resizeDecoration,
+  rotateDecoration,
   renameSavedProjectRecord,
   updateDecorationVariant,
   type Biotope,
@@ -217,8 +222,14 @@ function App() {
   const [measurements, setMeasurements] = useState<Measurements>(initialProject?.measurements ?? createDefaultMeasurements());
   const [viewMode, setViewMode] = useState<"3d" | "plan">("3d");
   const [selectedDecorationId, setSelectedDecorationId] = useState<number | null>(null);
+  const selectedDecorationIdRef = useRef<number | null>(null);
+  const [transformMode, setTransformMode] = useState<"translate" | "rotate">("translate");
   const [decorations, setDecorations] = useState<Decoration[]>(initialProject?.decorations ?? createDefaultDecorations());
   const [nextId, setNextId] = useState(initialProject?.nextId ?? 4);
+  const selectDecoration = (id: number | null) => {
+    selectedDecorationIdRef.current = id;
+    setSelectedDecorationId(id);
+  };
 
   useEffect(() => {
     if (!projectId) {
@@ -286,6 +297,11 @@ function App() {
     controls.maxDistance = 11;
     controls.maxPolarAngle = Math.PI * 0.48;
     controls.enableRotate = viewMode !== "plan";
+    const transformControls = new TransformControls(camera, renderer.domElement);
+    transformControls.setMode(transformMode);
+    transformControls.rotationSnap = Math.PI / 12;
+    transformControls.showX = transformMode !== "rotate";
+    transformControls.showZ = transformMode !== "rotate";
 
     const width = Math.min(3.2, Math.max(1.7, dimensions.width / 58));
     const depth = Math.min(2.5, Math.max(1.25, dimensions.depth / 38));
@@ -350,6 +366,7 @@ function App() {
     }
 
     const decorationObjects: THREE.Object3D[] = [];
+    const decorationObjectsById = new Map<number, THREE.Object3D>();
     decorations.forEach((item) => {
       const x = item.position.x * widthHalf;
       const z = item.position.z * depthHalf;
@@ -383,9 +400,11 @@ function App() {
           plant.add(foliage);
         }
         plant.scale.setScalar(sizeScale);
+        plant.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
         plant.position.set(x, floorY + 0.1 + verticalOffset, z);
         scene.add(plant);
         decorationObjects.push(plant);
+        decorationObjectsById.set(item.id, plant);
       } else if (item.kind === "Cachette") {
         const hide = new THREE.Group();
         hide.userData.decorationId = item.id;
@@ -413,9 +432,11 @@ function App() {
         }
         hide.add(entrance);
         hide.scale.setScalar(sizeScale);
+        hide.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
         hide.position.set(x, floorY + 0.1 + verticalOffset, z);
         scene.add(hide);
         decorationObjects.push(hide);
+        decorationObjectsById.set(item.id, hide);
       } else {
         const isPebble = variant === "Galet";
         const rock = new THREE.Mesh(
@@ -424,10 +445,12 @@ function App() {
         );
         const rockScale = variant === "Stratifiée" ? [1.35, 0.48, 1.1] : isPebble ? [1.25, 0.72, 0.95] : [1.2, 0.82, 0.95];
         rock.scale.set(rockScale[0] * sizeScale, rockScale[1] * sizeScale, rockScale[2] * sizeScale);
+        rock.rotation.y = THREE.MathUtils.degToRad(item.rotation ?? 0);
         rock.position.set(x, floorY + 0.28 + verticalOffset, z);
         rock.userData.decorationId = item.id;
         scene.add(rock);
         decorationObjects.push(rock);
+        decorationObjectsById.set(item.id, rock);
       }
     });
 
@@ -455,6 +478,33 @@ function App() {
     planGrid.visible = viewMode === "plan";
     scene.add(planGrid);
 
+    transformControls.detach();
+    scene.add(transformControls.getHelper());
+    const selectedObject = selectedDecorationIdRef.current === null ? undefined : decorationObjectsById.get(selectedDecorationIdRef.current);
+    if (viewMode === "3d" && selectedObject) transformControls.attach(selectedObject);
+    transformControls.addEventListener("dragging-changed", (event) => {
+      controls.enabled = !event.value;
+    });
+    const saveTransformedDecoration = () => {
+      const object = transformControls.object;
+      if (!object || object.userData.decorationId == null) return;
+      const id = Number(object.userData.decorationId);
+      const decoration = decorations.find((item) => item.id === id);
+      if (!decoration) return;
+      const position = {
+        x: THREE.MathUtils.clamp(object.position.x / widthHalf, -1, 1),
+        y: THREE.MathUtils.clamp((object.position.y - floorY - (decoration.kind === "Roche" ? 0.28 : 0.1)) / height, 0, 1),
+        z: THREE.MathUtils.clamp(object.position.z / depthHalf, -1, 1),
+      };
+      const degrees = THREE.MathUtils.radToDeg(object.rotation.y);
+      setDecorations((current) => rotateDecoration(
+        current.map((item) => item.id === id ? { ...item, position } : item),
+        id,
+        degrees,
+      ));
+    };
+    transformControls.addEventListener("mouseUp", saveTransformedDecoration);
+
     let draggedObject: THREE.Object3D | null = null;
     let draggedId: number | null = null;
     const dragOffset = new THREE.Vector2();
@@ -468,18 +518,28 @@ function App() {
       raycaster.setFromCamera(pointer, camera);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (viewMode !== "plan" || event.button !== 0) return;
+      if (event.button !== 0 || transformControls.dragging || transformControls.axis !== null) return;
       updatePointerRay(event);
       const hit = raycaster.intersectObjects(decorationObjects, true)[0];
-      if (!hit) return;
+      if (!hit) {
+        selectDecoration(null);
+        transformControls.detach();
+        return;
+      }
       let object: THREE.Object3D | null = hit.object;
       while (object && object.userData.decorationId == null) object = object.parent;
+      if (!object) return;
+      const id = Number(object.userData.decorationId);
+      selectDecoration(id);
+      if (viewMode === "3d") {
+        transformControls.attach(object);
+        return;
+      }
       const point = raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3());
-      if (!object || !point) return;
+      if (!point) return;
       draggedObject = object;
-      draggedId = Number(object.userData.decorationId);
+      draggedId = id;
       dragOffset.set(object.position.x - point.x, object.position.z - point.z);
-      setSelectedDecorationId(draggedId);
       controls.enabled = false;
       renderer.domElement.setPointerCapture(event.pointerId);
       event.preventDefault();
@@ -531,6 +591,8 @@ function App() {
       cancelAnimationFrame(frame);
       observer.disconnect();
       controls.dispose();
+      transformControls.dispose();
+      scene.remove(transformControls.getHelper());
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
@@ -545,7 +607,7 @@ function App() {
         }
       });
     };
-  }, [shape, dimensions, biotope, decorations, viewMode]);
+  }, [shape, dimensions, biotope, decorations, viewMode, transformMode]);
 
   const updateDimension = (key: keyof typeof dimensions, value: string) => {
     const numericValue = Number(value);
@@ -590,13 +652,25 @@ function App() {
     setDecorations((current) => resizeDecoration(current, id, Number(value)));
   };
 
+  const updateDecorationRotation = (id: number, value: string) => {
+    setDecorations((current) => rotateDecoration(current, id, Number(value)));
+  };
+
   const updateDecorationVariantChoice = (id: number, variant: string) => {
     setDecorations((current) => updateDecorationVariant(current, id, variant));
   };
 
+  const duplicateSelectedDecoration = () => {
+    const id = selectedDecorationIdRef.current;
+    if (id === null || !decorations.some((item) => item.id === id)) return;
+    setDecorations((current) => duplicateDecoration(current, id, nextId));
+    setNextId((current) => current + 1);
+    selectDecoration(nextId);
+  };
+
   const removeDecoration = (id: number) => {
     setDecorations((current) => current.filter((item) => item.id !== id));
-    if (selectedDecorationId === id) setSelectedDecorationId(null);
+    if (selectedDecorationId === id) selectDecoration(null);
   };
 
   const closeProjectNameDialog = () => {
@@ -812,7 +886,7 @@ function App() {
     setDecorations(project.decorations);
     setNextId(project.nextId);
     setMeasurements(project.measurements ?? createDefaultMeasurements());
-    setSelectedDecorationId(null);
+    selectDecoration(null);
     setViewMode("3d");
     setSavedProjects(projects);
     setSaveStatus("saved");
@@ -835,7 +909,7 @@ function App() {
     setDecorations(project.decorations);
     setNextId(project.nextId);
     setMeasurements(project.measurements ?? createDefaultMeasurements());
-    setSelectedDecorationId(null);
+    selectDecoration(null);
     setSaveStatus("saved");
     setSaveFeedback("");
     localStorage.setItem(currentProjectStorageKey, JSON.stringify(project));
@@ -855,7 +929,7 @@ function App() {
     setDecorations(createDefaultDecorations());
     setNextId(4);
     setMeasurements(createDefaultMeasurements());
-    setSelectedDecorationId(null);
+    selectDecoration(null);
     setViewMode("3d");
     setSaveStatus("idle");
     setSaveFeedback("");
@@ -980,6 +1054,14 @@ function App() {
                   <span className={`decor-swatch swatch-${item.kind.toLowerCase()}`}>{item.kind === "Plante" ? <Leaf size={14} /> : item.kind === "Cachette" ? <Expand size={14} /> : <span className="rock-icon" />}</span>
                   <div className="decor-editor">
                     <div className="decor-item-heading"><span>{item.kind} · {item.variant ?? getDefaultDecorationVariant(item.kind, biotope)} <small>{String(index + 1).padStart(2, "0")}</small></span><small className="decor-position">Paroi proche {item.nearestWallCm} cm</small></div>
+                    {selectedDecorationId === item.id && viewMode === "3d" && <div className="transform-tools" role="group" aria-label={`Outils pour ${item.kind}`}>
+                      <div className="transform-modes" role="group" aria-label="Mode de transformation">
+                        <button type="button" className={transformMode === "translate" ? "active" : ""} aria-label="Déplacer" aria-pressed={transformMode === "translate"} title="Déplacer" onClick={() => setTransformMode("translate")}><Move size={13} /></button>
+                        <button type="button" className={transformMode === "rotate" ? "active" : ""} aria-label="Pivoter" aria-pressed={transformMode === "rotate"} title="Pivoter" onClick={() => setTransformMode("rotate")}><RotateCcw size={13} /></button>
+                      </div>
+                      <button type="button" aria-label="Dupliquer" title="Dupliquer" onClick={duplicateSelectedDecoration}><Copy size={13} /></button>
+                      <button type="button" className="transform-delete" aria-label="Supprimer" title="Supprimer" onClick={() => removeDecoration(item.id)}><Trash2 size={13} /></button>
+                    </div>}
                     <label className="decor-variant-control"><span>Type</span><select aria-label={`Type de ${item.kind}`} value={selectedVariant} onChange={(event) => updateDecorationVariantChoice(item.id, event.target.value)}>{!variantIsSuggested && <option value={selectedVariant}>{selectedVariant} · non proposé pour {biotope.toLowerCase()}</option>}{variantOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
                     {item.kind === "Plante" && <small className={`plant-variant-note ${variantIsSuggested ? "" : "not-suggested"}`}>{variantIsSuggested ? "Style visuel uniquement; vérifiez l’espèce botanique." : `Style non proposé pour le biotope ${biotope.toLowerCase()}.`}</small>}
                     <div className="decor-coordinate-grid">
@@ -988,6 +1070,7 @@ function App() {
                       <label><span>Y · hauteur</span><input type="number" min="0" max={dimensions.height} step="1" aria-label={`Hauteur Y de ${item.kind} en centimètres`} value={item.yCm} onChange={(event) => updateDecorationPosition(item.id, "y", event.target.value)} /></label>
                     </div>
                     <label className="decor-size-control"><span>Taille visuelle <output>{item.size ?? 100}%</output></span><input type="range" min="50" max="150" step="10" aria-label={`Taille visuelle de ${item.kind}`} value={item.size ?? 100} onChange={(event) => updateDecorationSize(item.id, event.target.value)} /></label>
+                    <label className="decor-rotation-control"><span>Rotation Y · degrés</span><input type="number" min="0" max="359" step="15" aria-label={`Rotation de ${item.kind} en degrés`} value={item.rotation ?? 0} onChange={(event) => updateDecorationRotation(item.id, event.target.value)} /></label>
                   </div>
                   <button type="button" className="remove-button" title={`Retirer ${item.kind}`} aria-label={`Retirer ${item.kind}`} onClick={() => removeDecoration(item.id)}><X size={14} /></button>
                 </div>;

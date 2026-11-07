@@ -3,6 +3,7 @@ import {
   calculateProjectChecks,
   defaultDecorationVariant,
   decorationVariants,
+  duplicateDecoration,
   getBiotopeGuidance,
   getDecorationVariantsForBiotope,
   getDefaultDecorationVariant,
@@ -14,6 +15,7 @@ import {
   removeSavedProjectRecord,
   resolveBiotopeSelection,
   resizeDecoration,
+  rotateDecoration,
   renameSavedProjectRecord,
   updateDecorationVariant,
   type Measurements,
@@ -95,6 +97,7 @@ describe("project export validation", () => {
     ["position outside terrarium", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], position: { x: 1.1, z: 0 } }] } }],
     ["height above terrarium", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], position: { x: 0, y: 1.1, z: 0 } }] } }],
     ["decoration size outside supported range", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], size: 151 }] } }],
+    ["decoration rotation outside supported range", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], rotation: 360 }] } }],
     ["variant incompatible with decoration kind", { ...projectExport, project: { ...project, decorations: [{ ...project.decorations[0], kind: "Plante", variant: "Grotte" }] } }],
     ["duplicate decoration IDs", { ...projectExport, project: { ...project, decorations: [project.decorations[0], { ...project.decorations[1], id: project.decorations[0].id }] } }],
   ])("rejects %s", (_reason, invalidExport) => {
@@ -211,6 +214,21 @@ describe("dimensioned plan placement", () => {
     expect(resizeDecoration([decoration], decoration.id, 125)[0].size).toBe(125);
     expect(resizeDecoration([decoration], decoration.id, 200)[0].size).toBe(150);
     expect(resizeDecoration([decoration], decoration.id, 20)[0].size).toBe(50);
+  });
+
+  it("normalizes decoration rotation to one turn", () => {
+    const decoration = project.decorations[0];
+
+    expect(rotateDecoration([decoration], decoration.id, -90)[0].rotation).toBe(270);
+    expect(rotateDecoration([decoration], decoration.id, 450)[0].rotation).toBe(90);
+  });
+
+  it("duplicates a decoration with its settings and an offset position", () => {
+    const source = { ...project.decorations[0], size: 120, rotation: 45, position: { x: 0.9, y: 0.4, z: -0.5 } };
+    const duplicated = duplicateDecoration([source], source.id, 3);
+
+    expect(duplicated[1]).toEqual({ ...source, id: 3, position: { x: 0.75, y: 0.4, z: -0.35 } });
+    expect(duplicateDecoration([source], source.id, source.id)).toEqual([source]);
   });
 
   it("sets only variants allowed for each decoration kind", () => {
