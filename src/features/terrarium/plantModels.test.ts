@@ -29,4 +29,15 @@ describe("species-specific plant models", () => {
     expect(fern.children.length).toBeGreaterThan(rosette.children.length);
     expect(new Set([fern.scale.y, rosette.scale.y, foliage.scale.y]).size).toBeGreaterThan(1);
   });
+
+  it("uses distinct natural leaf tones in the same model", () => {
+    const fern = createPlantModel(undefined, "Fougère", 0x65804b);
+    const leafColors = new Set<number>();
+    fern.traverse((object) => {
+      if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshStandardMaterial)) return;
+      if (object.material.side === THREE.DoubleSide) leafColors.add(object.material.color.getHex());
+    });
+
+    expect(leafColors.size).toBeGreaterThan(1);
+  });
 });

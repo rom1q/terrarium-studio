@@ -15,8 +15,9 @@ export function createPlantModel(
 ): THREE.Group {
   const profile = visualProfile ?? fallbackProfiles[variant as keyof typeof fallbackProfiles] ?? fallbackProfiles["Feuillage dense"];
   const plant = new THREE.Group();
+  const foliageHighlight = new THREE.Color(plantColor).lerp(new THREE.Color(0xc3ce85), 0.22);
   const foliage = new THREE.MeshStandardMaterial({ color: plantColor, roughness: 0.78, side: THREE.DoubleSide });
-  const foliageLight = new THREE.MeshStandardMaterial({ color: plantColor, roughness: 0.82, side: THREE.DoubleSide });
+  const foliageLight = new THREE.MeshStandardMaterial({ color: foliageHighlight, roughness: 0.82, side: THREE.DoubleSide });
   const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x526d3e, roughness: 0.86 });
   const veinMaterial = new THREE.MeshStandardMaterial({ color: 0xa45559, roughness: 0.76 });
   const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage) => {
