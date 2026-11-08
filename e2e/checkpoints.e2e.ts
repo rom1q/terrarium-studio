@@ -81,6 +81,14 @@ test("a crested gecko hatchling uses its sourced stage profile", async ({ page }
   await expect(report.getByRole("link", { name: /Lighting, Heating & Humidity/ })).toBeVisible();
 });
 
+test("biotope guidance pairs a clear status with its source explanation", async ({ page }) => {
+  await page.goto("/");
+  const guidance = page.getByRole("status").filter({ hasText: "Repère compatible" });
+
+  await expect(guidance).toContainText("La RSPCA décrit un habitat d’origine sec et recommande 30–40 % d’humidité.");
+  await expect(guidance.locator("p")).toHaveCSS("font-size", "10px");
+});
+
 test("edited dimensions and readings appear in the report", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Largeur en centimètres").fill("130");

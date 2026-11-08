@@ -652,6 +652,11 @@ function App() {
   };
 
   const selectedBiotopeGuidance = getBiotopeGuidance(selectedSpecies, biotope);
+  const biotopeGuidanceLabel = selectedBiotopeGuidance.status === "compatible"
+    ? "Repère compatible"
+    : selectedBiotopeGuidance.status === "incompatible"
+      ? "À éviter selon la référence"
+      : "À vérifier · non documenté";
   const { checks, hasInsufficientCheck, hasAttentionCheck, overallStatus } = calculateProjectChecks({ species: selectedSpecies, dimensions, shape, biotope, decorations, measurements, lifeStage });
   const activeLayoutWarning = checks.flatMap((check) => check.issues ?? []).find((warning) => warning.id === activeLayoutWarningId) ?? null;
   const showLayoutWarning = (warning: LayoutWarning) => {
@@ -802,7 +807,10 @@ function App() {
                 </button>;
               })}
             </div>
-            <p className={`biotope-guidance ${selectedBiotopeGuidance.status}`}>{selectedBiotopeGuidance.detail}</p>
+            <div className={`biotope-guidance ${selectedBiotopeGuidance.status}`} role="status" aria-live="polite">
+              <span className="biotope-guidance-icon" aria-hidden="true">{selectedBiotopeGuidance.status === "compatible" ? <Check size={14} /> : selectedBiotopeGuidance.status === "incompatible" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span>
+              <div><strong>{biotopeGuidanceLabel}</strong><p>{selectedBiotopeGuidance.detail}</p></div>
+            </div>
           </section>
 
           <DecorationPanel

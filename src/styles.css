@@ -81,6 +81,14 @@ h1, h2, p { margin-top: 0; }
 .size-summary { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: #879188; font-size: 9px; }
 .size-summary strong { color: #526553; font-weight: 600; margin-left: auto; }
 .biotope-options { display: grid; gap: 6px; }
+.biotope-guidance { display: grid; grid-template-columns: 17px minmax(0, 1fr); align-items: start; gap: 8px; margin: 9px 0 0; padding: 9px 10px; border-left: 3px solid #718b73; border-radius: 4px; background: #f1f5ee; }
+.biotope-guidance-icon { display: grid; place-items: center; padding-top: 1px; color: #58765b; }
+.biotope-guidance strong { display: block; color: #405944; font-size: 9px; font-weight: 700; }
+.biotope-guidance p { margin: 3px 0 0; color: #657369; font-size: 10px; line-height: 1.5; }
+.biotope-guidance.unknown { border-color: #9ba69a; background: #f3f5f1; }
+.biotope-guidance.unknown .biotope-guidance-icon, .biotope-guidance.unknown strong { color: #687568; }
+.biotope-guidance.incompatible { border-color: #bb805b; background: #faf2ed; }
+.biotope-guidance.incompatible .biotope-guidance-icon, .biotope-guidance.incompatible strong { color: #966047; }
 .biotope-option { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 35px; text-align: left; background: transparent; border: 1px solid #e8ebe4; border-radius: 4px; padding: 6px 9px; font-size: 10px; color: #67756b; cursor: pointer; }
 .biotope-option.selected { color: #435d47; background: #f4f7f0; border-color: #bdcbb9; }
 .biotope-icon { color: #7d9475; width: 18px; display: grid; place-items: center; }
