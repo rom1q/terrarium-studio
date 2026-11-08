@@ -7,11 +7,13 @@ const fallbackProfiles: Record<"Feuillage dense" | "Fougère" | "Rosette", Plant
   Fougère: { silhouette: "fern", heightScale: 1, spreadScale: 1, density: 7 },
   Rosette: { silhouette: "rosette", heightScale: 0.65, spreadScale: 0.9, density: 10 },
 };
+let sharedLeafDetailTexture: THREE.DataTexture | undefined;
 
 function createTaperedLeafGeometry() {
   const widthSegments = 6;
   const lengthSegments = 12;
   const vertices: number[] = [];
+  const uvs: number[] = [];
   const indices: number[] = [];
 
   for (let lengthIndex = 0; lengthIndex <= lengthSegments; lengthIndex += 1) {
@@ -22,6 +24,7 @@ function createTaperedLeafGeometry() {
       const width = acrossLeaf * taper;
       const curve = (1 - acrossLeaf * acrossLeaf) * Math.sin(Math.PI * alongLeaf) * 0.35;
       vertices.push(width, alongLeaf - 0.5, curve);
+      uvs.push((acrossLeaf + 1) / 2, alongLeaf);
     }
   }
 
@@ -35,6 +38,7 @@ function createTaperedLeafGeometry() {
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
@@ -49,6 +53,44 @@ function createLeafVeinGeometry() {
     new THREE.Vector3(0, 0.44, 0.08),
   ]);
   return new THREE.BufferGeometry().setFromPoints(curve.getPoints(8));
+}
+
+function getLeafDetailTexture() {
+  if (sharedLeafDetailTexture) return sharedLeafDetailTexture;
+  const width = 64;
+  const height = 128;
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    const alongLeaf = y / (height - 1);
+    for (let x = 0; x < width; x += 1) {
+      const acrossLeaf = x / (width - 1);
+      let tone = 244;
+      if (Math.abs(acrossLeaf - 0.5) < 0.014) tone = 192;
+      for (let vein = 0; vein < 8; vein += 1) {
+        const progress = (alongLeaf - (0.08 + vein * 0.105)) / 0.075;
+        if (progress < 0 || progress > 1) continue;
+        const branch = 0.055 + progress * 0.37;
+        if (Math.abs(Math.abs(acrossLeaf - 0.5) - branch) < 0.009) tone = Math.min(tone, 215);
+      }
+      let noise = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263);
+      noise = Math.imul(noise ^ (noise >>> 13), 1274126177);
+      noise = (noise ^ (noise >>> 16)) >>> 0;
+      tone = THREE.MathUtils.clamp(tone + (noise % 7) - 3, 0, 255);
+      const pixel = (y * width + x) * 4;
+      data[pixel] = tone;
+      data[pixel + 1] = tone;
+      data[pixel + 2] = tone;
+      data[pixel + 3] = 255;
+    }
+  }
+
+  sharedLeafDetailTexture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  sharedLeafDetailTexture.colorSpace = THREE.SRGBColorSpace;
+  sharedLeafDetailTexture.minFilter = THREE.LinearMipmapLinearFilter;
+  sharedLeafDetailTexture.magFilter = THREE.LinearFilter;
+  sharedLeafDetailTexture.generateMipmaps = true;
+  sharedLeafDetailTexture.needsUpdate = true;
+  return sharedLeafDetailTexture;
 }
 
 export type PlantSway = { rotationX: number; rotationZ: number };
@@ -68,8 +110,20 @@ export function createPlantModel(
   const profile = visualProfile ?? fallbackProfiles[variant as keyof typeof fallbackProfiles] ?? fallbackProfiles["Feuillage dense"];
   const plant = new THREE.Group();
   const foliageHighlight = new THREE.Color(plantColor).lerp(new THREE.Color(0xc3ce85), 0.22);
-  const foliage = new THREE.MeshStandardMaterial({ color: plantColor, roughness: 0.78, side: THREE.DoubleSide });
-  const foliageLight = new THREE.MeshStandardMaterial({ color: foliageHighlight, roughness: 0.82, side: THREE.DoubleSide });
+  const leafDetailTexture = getLeafDetailTexture();
+  const createFoliageMaterial = (color: THREE.ColorRepresentation, roughness: number) => new THREE.MeshPhysicalMaterial({
+    color,
+    map: leafDetailTexture,
+    bumpMap: leafDetailTexture,
+    bumpScale: 0.008,
+    roughness,
+    side: THREE.DoubleSide,
+    sheen: 0.28,
+    sheenRoughness: 0.62,
+    sheenColor: new THREE.Color(0xc5d69a),
+  });
+  const foliage = createFoliageMaterial(plantColor, 0.7);
+  const foliageLight = createFoliageMaterial(foliageHighlight, 0.74);
   const leafGeometry = createTaperedLeafGeometry();
   const leafVeinGeometry = createLeafVeinGeometry();
   const leafVeinMaterial = new THREE.LineBasicMaterial({ color: new THREE.Color(plantColor).multiplyScalar(0.68), transparent: true, opacity: 0.42 });

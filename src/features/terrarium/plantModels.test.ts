@@ -51,6 +51,14 @@ describe("species-specific plant models", () => {
     expect(leafGeometry).toBeDefined();
     expect(leafGeometry?.getAttribute("position").count).toBeGreaterThan(80);
     expect(leafGeometry?.getIndex()?.count).toBeGreaterThan(300);
+    expect(leafGeometry?.getAttribute("uv").count).toBe(leafGeometry?.getAttribute("position").count);
+    let leafMaterial: THREE.MeshPhysicalMaterial | undefined;
+    fern.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.geometry === leafGeometry) leafMaterial = object.material as THREE.MeshPhysicalMaterial;
+    });
+    expect(leafMaterial?.map).toBeDefined();
+    expect(leafMaterial?.bumpMap).toBe(leafMaterial?.map);
+    expect(leafMaterial?.sheen).toBeGreaterThan(0);
   });
 
   it("adds subtle central veins to broad rosette leaves", () => {
