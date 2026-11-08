@@ -1,46 +1,32 @@
 import * as THREE from "three";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { rockGeometryProfiles } from "../../domain/decorationGeometry";
 import type { DecorationVariant } from "../../domain/projectLogic";
 
 type RockVariant = Extract<DecorationVariant, "Roche anguleuse" | "Galet" | "Stratifiée">;
 
 function createFacetedGeometry(seed: number, baseColor: number) {
-  const geometry = new THREE.DodecahedronGeometry(0.32, 0);
+  const sourceGeometry = new THREE.IcosahedronGeometry(0.32, 1);
+  sourceGeometry.deleteAttribute("normal");
+  const geometry = mergeVertices(sourceGeometry, 1e-4);
+  sourceGeometry.dispose();
   const positions = geometry.getAttribute("position");
+  const colors = new Float32Array(positions.count * 3);
+  const faceColor = new THREE.Color(baseColor);
   for (let vertexIndex = 0; vertexIndex < positions.count; vertexIndex += 1) {
     const x = positions.getX(vertexIndex);
     const y = positions.getY(vertexIndex);
     const z = positions.getZ(vertexIndex);
     const noise = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 19.19) * 43758.5453;
-    const jitter = 1 + (noise - Math.floor(noise) - 0.5) * 0.08;
+    const variation = noise - Math.floor(noise);
+    const jitter = 1 + (variation - 0.5) * 0.08;
     positions.setXYZ(vertexIndex, x * jitter, y, z * jitter);
+    faceColor.setHex(baseColor).multiplyScalar(0.86 + variation * 0.22);
+    colors[vertexIndex * 3] = faceColor.r;
+    colors[vertexIndex * 3 + 1] = faceColor.g;
+    colors[vertexIndex * 3 + 2] = faceColor.b;
   }
   geometry.computeVertexNormals();
-  const colors = new Float32Array(positions.count * 3);
-  const first = new THREE.Vector3();
-  const second = new THREE.Vector3();
-  const third = new THREE.Vector3();
-  const normal = new THREE.Vector3();
-  const faceColor = new THREE.Color(baseColor);
-
-  for (let faceIndex = 0; faceIndex < positions.count / 3; faceIndex += 1) {
-    const vertexIndex = faceIndex * 3;
-    first.fromBufferAttribute(positions, vertexIndex);
-    second.fromBufferAttribute(positions, vertexIndex + 1);
-    third.fromBufferAttribute(positions, vertexIndex + 2);
-    normal.subVectors(second, first).cross(new THREE.Vector3().subVectors(third, first)).normalize();
-    const variation = 0.82 + ((faceIndex * 17 + seed * 11) % 9) * 0.035;
-    const lighting = normal.y > 0.45 ? 1.08 : normal.y < -0.35 ? 0.78 : 0.94;
-    faceColor.setHex(baseColor).multiplyScalar(variation * lighting);
-
-    for (let corner = 0; corner < 3; corner += 1) {
-      const colorIndex = (vertexIndex + corner) * 3;
-      colors[colorIndex] = faceColor.r;
-      colors[colorIndex + 1] = faceColor.g;
-      colors[colorIndex + 2] = faceColor.b;
-    }
-  }
-
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   return geometry;
 }
@@ -82,7 +68,7 @@ export function createRockModel(variant: RockVariant, seed = 0, surfaceNoise?: T
   const baseColor = seed % 2 ? 0x80796d : 0x978875;
   const body = new THREE.Mesh(
     createFacetedGeometry(seed, baseColor),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.98, flatShading: true, ...surfaceRelief }),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.98, ...surfaceRelief }),
   );
   body.scale.set(profile.scale[0], profile.scale[1], profile.scale[2]);
   body.rotation.y = seed % 3 * 0.22;
