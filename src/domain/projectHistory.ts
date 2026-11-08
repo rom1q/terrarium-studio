@@ -1,5 +1,6 @@
 import { getLifeStageLabel } from "./projectLogic";
 import type { Biotope, Decoration, LifeStage, Measurements, Shape } from "./projectLogic";
+import { getDefaultSubstrate, type Substrate } from "./substrates";
 
 export const MAX_PROJECT_HISTORY = 50;
 
@@ -9,6 +10,7 @@ export type EditableProjectState = {
   dimensions: { width: number; depth: number; height: number };
   species: string;
   lifeStage: LifeStage;
+  substrate?: Substrate;
   measurements: Measurements;
   decorations: Decoration[];
   nextId: number;
@@ -44,6 +46,9 @@ export function describeProjectHistoryDifference(from: EditableProjectState, to:
   const changes: string[] = [];
   if (from.shape !== to.shape) changes.push(`Format : ${from.shape} → ${to.shape}`);
   if (from.biotope !== to.biotope) changes.push(`Biotope : ${from.biotope} → ${to.biotope}`);
+  const fromSubstrate = from.substrate ?? getDefaultSubstrate(from.biotope);
+  const toSubstrate = to.substrate ?? getDefaultSubstrate(to.biotope);
+  if (from.biotope === to.biotope && fromSubstrate !== toSubstrate) changes.push(`Substrat : ${fromSubstrate} → ${toSubstrate}`);
   if (from.dimensions.width !== to.dimensions.width) changes.push(`Largeur : ${from.dimensions.width} → ${to.dimensions.width} cm`);
   if (from.dimensions.depth !== to.dimensions.depth) changes.push(`Profondeur : ${from.dimensions.depth} → ${to.dimensions.depth} cm`);
   if (from.dimensions.height !== to.dimensions.height) changes.push(`Hauteur : ${from.dimensions.height} → ${to.dimensions.height} cm`);

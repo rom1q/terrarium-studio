@@ -1,4 +1,5 @@
 import { plantCatalog } from "../data/plantCatalog";
+import { getBranchPattern } from "./branchPatterns";
 import type { Biotope, Decoration, DecorationVariant, PlantSilhouette } from "./projectLogic";
 
 export type LocalModelBounds = { halfWidth: number; halfDepth: number; minY: number; maxY: number };
@@ -76,20 +77,6 @@ export const hideGeometryProfiles = {
 } as const;
 
 export const otherDecorationGeometryProfiles = {
-  branch: {
-    straight: {
-      segments: [{ start: [-0.48, 0.16, 0], end: [0.48, 0.78, 0], radius: 0.075 }],
-      bounds: { halfWidth: 0.52, halfDepth: 0.08, minY: 0.085, maxY: 0.83 },
-    },
-    forked: {
-      segments: [
-        { start: [-0.48, 0.16, 0], end: [0.48, 0.78, 0], radius: 0.075 },
-        { start: [0.06, 0.48, 0], end: [-0.2, 0.9, 0.18], radius: 0.045 },
-        { start: [0.23, 0.59, 0], end: [0.38, 0.98, -0.16], radius: 0.04 },
-      ],
-      bounds: { halfWidth: 0.52, halfDepth: 0.22, minY: 0.085, maxY: 1.02 },
-    },
-  },
   platform: {
     slab: { width: 0.92, height: 0.1, depth: 0.62, y: 0.48 },
     support: { width: 0.07, height: 0.42, depth: 0.07, x: [-0.36, 0.36], y: 0.22, z: [-0.22, 0.22] },
@@ -147,7 +134,7 @@ export function getDecorationGeometryProfile(item: Decoration, biotope: Biotope)
       return makeProfile(profile.bounds, -profile.bounds.minY, profile.openings);
     }
     case "Branche":
-      return makeProfile((item.variant === "Branche droite" ? otherDecorationGeometryProfiles.branch.straight : otherDecorationGeometryProfiles.branch.forked).bounds);
+      return makeProfile(getBranchPattern(item.variant).bounds);
     case "Plateforme":
       return makeProfile(otherDecorationGeometryProfiles.platform.bounds);
     case "Gamelle":

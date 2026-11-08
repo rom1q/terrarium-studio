@@ -1,5 +1,6 @@
 import { plantCatalog } from "../data/plantCatalog";
 import { analyzeDecorationLayout, formatDecorationLayoutWarnings, type LayoutWarning } from "./layoutValidation";
+import { isKnownSubstrate, type Substrate } from "./substrates";
 
 export type Shape = "Basse" | "Cubique" | "Verticale";
 export type Biotope = "Désertique" | "Tropical" | "Paludarium";
@@ -12,7 +13,7 @@ export const decorationVariants = {
   Plante: ["Feuillage dense", "Fougère", "Rosette"],
   Roche: ["Roche anguleuse", "Galet", "Stratifiée"],
   Cachette: ["Grotte", "Tronc creux", "Écorce creuse"],
-  Branche: ["Branche droite", "Branche fourchue"],
+  Branche: ["Branche droite", "Branche fourchue", "Branche tortueuse", "Bois flotté", "Liane", "Racine de mangrove"],
   Plateforme: ["Plateforme en bois", "Plateau en liège"],
   Gamelle: ["Gamelle d’eau", "Coupelle sèche"],
   "Lampe chauffante": ["Spot chauffant"],
@@ -100,6 +101,7 @@ export type StoredProject = {
   decorations: Decoration[];
   nextId: number;
   lifeStage?: LifeStage;
+  substrate?: Substrate;
   measurements?: Measurements;
 };
 export type ProjectExport = { format: "terrarium-studio-project"; version: 1; exportedAt: string; project: StoredProject };
@@ -290,6 +292,7 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
   });
   const measurements = project.measurements;
   const isValidLifeStage = project.lifeStage === undefined || project.lifeStage === "hatchling" || project.lifeStage === "juvenile" || project.lifeStage === "adult";
+  const isValidSubstrate = project.substrate === undefined || isKnownSubstrate(project.substrate);
   const isValidMeasurements = measurements === undefined || (
     typeof measurements === "object" && measurements !== null &&
     (["hotSideTemperature", "coolSideTemperature", "baskingUvi", "coolSideHumidity"] as const).every((key) => {
@@ -301,7 +304,7 @@ export function isStoredProject(value: unknown, allowedSpecies: readonly string[
   return typeof project.id === "string" && typeof project.name === "string" &&
     ["Basse", "Cubique", "Verticale"].includes(project.shape as string) &&
     ["Désertique", "Tropical", "Paludarium"].includes(project.biotope as string) &&
-    isValidDimensions && isValidLifeStage && typeof project.species === "string" && allowedSpecies.includes(project.species) &&
+    isValidDimensions && isValidLifeStage && isValidSubstrate && typeof project.species === "string" && allowedSpecies.includes(project.species) &&
     isValidDecorations && isValidMeasurements && Number.isInteger(project.nextId);
 }
 

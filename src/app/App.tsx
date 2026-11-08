@@ -56,6 +56,7 @@ import {
   type StoredProject,
 } from "../domain/projectLogic";
 import { getPlantProfile } from "../data/plantCatalog";
+import { normalizeSubstrate, resolveSubstrate, substrateCatalog, substratesByBiotope, type Substrate } from "../domain/substrates";
 import { speciesCatalog as speciesList, speciesLabels } from "../data/speciesCatalog";
 import { DecorationIcon, DecorationPanel, decorationKindClass } from "../features/terrarium/DecorationPanel";
 const TerrariumScene = lazy(() => import("../features/terrarium/TerrariumScene").then((module) => ({ default: module.TerrariumScene })));
@@ -135,12 +136,14 @@ function App() {
     dimensions: initialProject?.dimensions ?? { width: 120, depth: 60, height: 80 },
     species: initialProject?.species ?? speciesList[0].label,
     lifeStage: initialProject?.lifeStage ?? "adult",
+    substrate: normalizeSubstrate(initialProject?.substrate, initialBiotope),
     measurements: initialProject?.measurements ?? createDefaultMeasurements(),
     decorations: initialProject?.decorations ?? createDefaultDecorations(),
     nextId: initialProject?.nextId ?? 5,
   }, (project) => createProjectHistory(project, initialProject ? "Projet chargé" : "Projet initial"));
   const currentProjectHistoryEntry = projectHistory.entries[projectHistory.cursor];
-  const { shape, biotope, dimensions, species, lifeStage, measurements, decorations, nextId } = currentProjectHistoryEntry.project;
+  const { shape, biotope, dimensions, species, lifeStage, substrate: chosenSubstrate, measurements, decorations, nextId } = currentProjectHistoryEntry.project;
+  const substrate = resolveSubstrate(chosenSubstrate, biotope);
   const previewedCheckpoint = showHistoryTimeline && previewedCheckpointId
     ? savedProjectCheckpoints.find((checkpoint) => checkpoint.id === previewedCheckpointId) ?? null
     : null;
@@ -154,6 +157,7 @@ function App() {
     dimensions: project.dimensions,
     species: project.species,
     lifeStage: project.lifeStage ?? "adult",
+    substrate: normalizeSubstrate(project.substrate, project.biotope),
     measurements: project.measurements ?? createDefaultMeasurements(),
     decorations: project.decorations,
     nextId: project.nextId,
@@ -200,7 +204,8 @@ function App() {
     updateProjectHistory(() => restored, undefined, `Restaurer : ${previewedCheckpoint.label}`);
   };
   const setShape = (value: Shape) => updateProjectHistory((current) => ({ ...current, shape: value }), undefined, `Format : ${value}`);
-  const setBiotope = (value: Biotope) => updateProjectHistory((current) => ({ ...current, biotope: value }), undefined, `Biotope : ${value}`);
+  const setBiotope = (value: Biotope) => updateProjectHistory((current) => ({ ...current, biotope: value, substrate: normalizeSubstrate(current.substrate, value) }), undefined, `Biotope : ${value}`);
+  const setSubstrate = (value: Substrate) => updateProjectHistory((current) => ({ ...current, substrate: value }), undefined, `Substrat : ${value}`);
   const setLifeStage = (value: LifeStage) => updateProjectHistory((current) => ({ ...current, lifeStage: value }), undefined, `Stade de vie : ${getLifeStageLabel(value).toLowerCase()}`);
   const setDecorations: Dispatch<SetStateAction<Decoration[]>> = (update) => updateProjectHistory((current) => ({
     ...current,
@@ -258,7 +263,7 @@ function App() {
       return;
     }
 
-    const project: StoredProject = { id: projectId, name: projectName, shape, biotope, dimensions, species, lifeStage, decorations, nextId, measurements };
+    const project: StoredProject = { id: projectId, name: projectName, shape, biotope, dimensions, species, lifeStage, substrate: chosenSubstrate, decorations, nextId, measurements };
     const serializedProject = JSON.stringify(project);
     if (serializedProject === lastSavedProjectRef.current) return;
 
@@ -278,7 +283,7 @@ function App() {
     }, 600);
 
     return () => window.clearTimeout(timeout);
-  }, [projectId, projectName, shape, biotope, dimensions, species, lifeStage, decorations, nextId, measurements]);
+  }, [projectId, projectName, shape, biotope, dimensions, species, lifeStage, chosenSubstrate, decorations, nextId, measurements]);
 
   const updateDimension = (key: keyof typeof dimensions, value: string) => {
     const numericValue = Number(value);
@@ -291,7 +296,7 @@ function App() {
   const updateSpecies = (speciesLabel: string) => {
     const nextSpecies = speciesList.find((item) => item.label === speciesLabel) ?? speciesList[0];
     const nextBiotope = resolveBiotopeSelection(nextSpecies, biotope);
-    updateProjectHistory((current) => ({ ...current, species: speciesLabel, biotope: nextBiotope }), undefined, `Espèce : ${nextSpecies.commonName}`);
+    updateProjectHistory((current) => ({ ...current, species: speciesLabel, biotope: nextBiotope, substrate: normalizeSubstrate(current.substrate, nextBiotope) }), undefined, `Espèce : ${nextSpecies.commonName}`);
     if (nextBiotope !== biotope) {
       setSaveFeedback(`Biotope adapté : ${nextBiotope}`);
       window.setTimeout(() => setSaveFeedback(""), 2200);
@@ -382,7 +387,7 @@ function App() {
     const { project: renamedProject, projects } = result;
     const isCurrentProject = projectId === id;
     const currentProject = isCurrentProject
-      ? { ...renamedProject, shape, biotope, dimensions, species, lifeStage, decorations, nextId, measurements }
+      ? { ...renamedProject, shape, biotope, dimensions, species, lifeStage, substrate: chosenSubstrate, decorations, nextId, measurements }
       : renamedProject;
     if (!writeProjectCollection(projects, isCurrentProject ? currentProject : undefined)) {
       setProjectDialogError("Impossible d’enregistrer le nouveau nom sur cet appareil.");
@@ -440,6 +445,7 @@ function App() {
       dimensions,
       species,
       lifeStage,
+      substrate: chosenSubstrate,
       decorations,
       nextId,
       measurements,
@@ -480,6 +486,7 @@ function App() {
       dimensions,
       species,
       lifeStage,
+      substrate: chosenSubstrate,
       decorations,
       nextId,
       measurements,
@@ -538,6 +545,7 @@ function App() {
       dimensions,
       species,
       lifeStage,
+      substrate: chosenSubstrate,
       decorations,
       nextId,
       measurements,
@@ -569,6 +577,7 @@ function App() {
       biotope: importedBiotope,
       dimensions: { ...importedProject.dimensions },
       lifeStage: importedProject.lifeStage ?? "adult",
+      substrate: normalizeSubstrate(importedProject.substrate, importedBiotope),
       decorations: importedProject.decorations.map((item) => ({ ...item, position: { ...item.position } })),
       measurements: importedProject.measurements ?? createDefaultMeasurements(),
     };
@@ -589,6 +598,7 @@ function App() {
       dimensions: project.dimensions,
       species: project.species,
       lifeStage: project.lifeStage ?? "adult",
+      substrate: project.substrate,
       measurements: project.measurements ?? createDefaultMeasurements(),
       decorations: project.decorations,
       nextId: project.nextId,
@@ -614,6 +624,7 @@ function App() {
       dimensions: project.dimensions,
       species: project.species,
       lifeStage: project.lifeStage ?? "adult",
+      substrate: normalizeSubstrate(project.substrate, projectBiotope),
       measurements: project.measurements ?? createDefaultMeasurements(),
       decorations: project.decorations,
       nextId: project.nextId,
@@ -811,6 +822,16 @@ function App() {
               <span className="biotope-guidance-icon" aria-hidden="true">{selectedBiotopeGuidance.status === "compatible" ? <Check size={14} /> : selectedBiotopeGuidance.status === "incompatible" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span>
               <div><strong>{biotopeGuidanceLabel}</strong><p>{selectedBiotopeGuidance.detail}</p></div>
             </div>
+            <div className="substrate-picker">
+              <p className="field-label">SUBSTRAT</p>
+              <div className="substrate-options" role="group" aria-label="Substrat">
+                {substratesByBiotope[biotope].map((option) => <button key={option} type="button" aria-pressed={substrate === option} title={substrateCatalog[option].description} className={`substrate-option ${substrate === option ? "selected" : ""}`} onClick={() => setSubstrate(option)}>
+                  <i className="substrate-swatch" style={{ background: `#${substrateCatalog[option].color.toString(16).padStart(6, "0")}` }} />
+                  <span>{option}</span>
+                </button>)}
+              </div>
+              <p className="species-note"><CircleHelp size={13} /> {substrateCatalog[substrate].description} Drainage {substrateCatalog[substrate].drainage.toLowerCase()} · humidité {substrateCatalog[substrate].moisture.toLowerCase()}.</p>
+            </div>
           </section>
 
           <DecorationPanel
@@ -887,7 +908,7 @@ function App() {
           </section>}
           <div className="viewport-wrap">
             <Suspense fallback={<div className="scene-loading" role="status">Chargement de la scène…</div>}>
-              <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} previewedLayoutSuggestion={previewedLayoutSuggestion} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />
+              <TerrariumScene shape={shape} dimensions={dimensions} biotope={biotope} substrate={substrate} decorations={decorations} viewMode={viewMode} selectedDecorationId={selectedDecorationId} transformMode={transformMode} selectedSpecies={selectedSpecies} habitatZoneGuidance={habitatZoneGuidance} showHabitatZones={showHabitatZones} activeLayoutWarning={activeLayoutWarning} previewedLayoutSuggestion={previewedLayoutSuggestion} onDecorationSelectionChange={handleSceneDecorationSelection} onDecorationsChange={setDecorations} />
             </Suspense>
             <div className="viewport-label"><span className="live-dot" /> {viewMode === "plan" ? "VUE EN PLAN" : "APERÇU EN DIRECT"}</div>
             <div className="viewport-tools"><button type="button" title="Réinitialiser le décor" aria-label="Réinitialiser le décor" onClick={() => setDecorations([])}><RotateCcw size={16} /></button></div>
@@ -905,7 +926,7 @@ function App() {
             </div>}
             <div className="viewport-caption"><span className="caption-index">FIG. 01</span><span>{biotope} <b>·</b> {shape.toLowerCase()}</span></div>
           </div>
-          <div className="stage-footer"><span><span className="legend-dot glass-dot" /> Verre clair</span><span><span className="legend-dot ground-dot" /> Substrat {biotope.toLowerCase()}</span><span className="orbit-hint">{viewMode === "plan" ? "Glisser un élément pour le déplacer" : `${decorations.length} éléments dans la scène`}</span></div>
+          <div className="stage-footer"><span><span className="legend-dot glass-dot" /> Verre clair</span><span><span className="legend-dot ground-dot" /> Substrat {substrate.toLowerCase()}</span><span className="orbit-hint">{viewMode === "plan" ? "Glisser un élément pour le déplacer" : `${decorations.length} éléments dans la scène`}</span></div>
         </section>
 
         <aside className="panel right-panel">
@@ -964,6 +985,7 @@ function App() {
             <dl className="report-facts">
               <div><dt>Dimensions intérieures</dt><dd>{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</dd></div>
               <div><dt>Biotope et format</dt><dd>{biotope} · {shape.toLowerCase()}</dd></div>
+              <div><dt>Substrat</dt><dd>{substrate}</dd></div>
               <div><dt>Stade de vie</dt><dd>{getLifeStageLabel(lifeStage)}</dd></div>
               <div><dt>Volume estimé</dt><dd>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</dd></div>
               <div><dt>Statut du bilan</dt><dd>{overallStatus}</dd></div>

@@ -94,6 +94,13 @@ describe("project export validation", () => {
     expect(parseProjectExport({ ...projectExport, project: hatchlingProject }, speciesLabels)?.lifeStage).toBe("hatchling");
   });
 
+  it("preserves a known substrate and rejects an unknown one", () => {
+    const withSubstrate = { ...project, substrate: "Fibre de coco" as const };
+
+    expect(parseProjectExport({ ...projectExport, project: withSubstrate }, speciesLabels)?.substrate).toBe("Fibre de coco");
+    expect(parseProjectExport({ ...projectExport, project: { ...project, substrate: "Lave fondue" } }, speciesLabels)).toBeNull();
+  });
+
   it("accepts older projects without measurements", () => {
     const { measurements: _measurements, lifeStage: _lifeStage, ...legacyProject } = project;
     expect(isStoredProject(legacyProject, speciesLabels)).toBe(true);

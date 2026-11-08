@@ -8,6 +8,9 @@ import { plantCatalog } from "../../data/plantCatalog";
 import { createPlantModel, getPlantSway } from "./plantModels";
 import { createRockModel } from "./decorationModels";
 import { createHideModel } from "./hideModels";
+import { createBranchModel } from "./branchModels";
+import { createSubstrateScatter, createSubstrateTexture } from "./substrateTextures";
+import { substrateCatalog, type Substrate } from "../../domain/substrates";
 import { getTerrariumSceneDimensions, type LayoutSuggestion, type LayoutWarning } from "../../domain/layoutValidation";
 import { getDecorationGeometryProfile, otherDecorationGeometryProfiles } from "../../domain/decorationGeometry";
 
@@ -15,6 +18,7 @@ type TerrariumSceneProps = {
   shape: Shape;
   dimensions: { width: number; depth: number; height: number };
   biotope: Biotope;
+  substrate: Substrate;
   decorations: Decoration[];
   viewMode: "3d" | "plan";
   selectedDecorationId: number | null;
@@ -63,32 +67,6 @@ function createContactShadowTexture() {
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = false;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function createSubstrateTexture() {
-  const size = 128;
-  const data = new Uint8Array(size * size * 4);
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      let noise = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263);
-      noise = Math.imul(noise ^ (noise >>> 13), 1274126177);
-      noise = (noise ^ (noise >>> 16)) >>> 0;
-      const tone = 222 + noise % 29;
-      const index = (y * size + x) * 4;
-      data[index] = tone;
-      data[index + 1] = tone;
-      data[index + 2] = tone;
-      data[index + 3] = 255;
-    }
-  }
-
-  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = true;
   texture.needsUpdate = true;
   return texture;
 }
@@ -150,7 +128,7 @@ function createWoodGrainTexture() {
   return texture;
 }
 
-export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
+export function TerrariumScene({ shape, dimensions, biotope, substrate, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const cameraViewRef = useRef<CameraViewState | null>(null);
   const habitatZoneGuidanceRef = useRef(habitatZoneGuidance);
@@ -174,7 +152,8 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#e9ede4");
     const contactShadowTexture = createContactShadowTexture();
-    const substrateTexture = createSubstrateTexture();
+    const substrateProfile = substrateCatalog[substrate];
+    const substrateTexture = createSubstrateTexture(substrateProfile.texture);
     const surfaceNoiseTexture = createSurfaceNoiseTexture();
     const woodGrainTexture = createWoodGrainTexture();
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
@@ -249,7 +228,8 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       depthWrite: false,
     });
     const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x414f43, roughness: 0.36 });
-    const groundMaterial = new THREE.MeshStandardMaterial({ color: colors.ground, map: substrateTexture, bumpMap: substrateTexture, bumpScale: 0.018, roughness: 0.92 });
+    const groundMaterial = new THREE.MeshStandardMaterial({ color: substrateProfile.color, map: substrateTexture, bumpMap: substrateTexture, bumpScale: substrateProfile.texture === "fine-sand" ? 0.012 : 0.04, roughness: substrateProfile.roughness });
+    substrateTexture.repeat.set(Math.max(2, Math.round(width * 2.5)), Math.max(2, Math.round(depth * 2.5)));
     const widthHalf = width / 2;
     const depthHalf = depth / 2;
 
@@ -257,6 +237,8 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     floor.position.y = floorY;
     floor.receiveShadow = true;
     scene.add(floor);
+    const scatter = createSubstrateScatter(substrateProfile, width, depth, floorY + 0.1);
+    if (scatter) scene.add(scatter);
 
     if (biotope === "Paludarium") {
       const water = new THREE.Mesh(
@@ -329,22 +311,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
         const hide = createHideModel(variant as "Grotte" | "Tronc creux" | "Écorce creuse", surfaceNoiseTexture);
         addDecorationObject(hide);
       } else if (item.kind === "Branche") {
-        const branch = new THREE.Group();
-        const branchProfile = otherDecorationGeometryProfiles.branch[variant === "Branche droite" ? "straight" : "forked"];
-        const wood = new THREE.MeshStandardMaterial({ color: variant === "Branche droite" ? 0x805f42 : 0x705238, roughness: 0.94, bumpMap: woodGrainTexture, bumpScale: 0.06 });
-        const addSegment = (start: THREE.Vector3, end: THREE.Vector3, radius: number) => {
-          const direction = new THREE.Vector3().subVectors(end, start);
-          const segment = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.72, radius, direction.length(), 8), wood);
-          segment.position.copy(start).add(end).multiplyScalar(0.5);
-          segment.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-          branch.add(segment);
-        };
-        branchProfile.segments.forEach((segment) => addSegment(
-          new THREE.Vector3(segment.start[0], segment.start[1], segment.start[2]),
-          new THREE.Vector3(segment.end[0], segment.end[1], segment.end[2]),
-          segment.radius,
-        ));
-        addDecorationObject(branch);
+        addDecorationObject(createBranchModel(variant, woodGrainTexture));
       } else if (item.kind === "Plateforme") {
         const platform = new THREE.Group();
         const platformProfile = otherDecorationGeometryProfiles.platform;
@@ -745,7 +712,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       surfaceNoiseTexture.dispose();
       woodGrainTexture.dispose();
     };
-  }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
+  }, [shape, dimensions, biotope, substrate, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
 
   return <div className="viewport" ref={viewportRef} data-mode={viewMode} />;
 }
