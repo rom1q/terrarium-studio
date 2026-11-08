@@ -25,8 +25,13 @@ describe("species-specific plant models", () => {
     const fern = createPlantModel(undefined, "Fougère", 0x65804b);
     const rosette = createPlantModel(undefined, "Rosette", 0x65804b);
     const foliage = createPlantModel(undefined, "Feuillage dense", 0x65804b);
+    let fernLeafInstances = 0;
+    fern.traverse((object) => {
+      if (object instanceof THREE.InstancedMesh) fernLeafInstances += object.count;
+    });
 
-    expect(fern.children.length).toBeGreaterThan(rosette.children.length);
+    expect(fernLeafInstances).toBeGreaterThan(80);
+    expect(rosette.children.length).toBeGreaterThan(0);
     expect(new Set([fern.scale.y, rosette.scale.y, foliage.scale.y]).size).toBeGreaterThan(1);
   });
 

@@ -127,13 +127,23 @@ export function createPlantModel(
   const leafGeometry = createTaperedLeafGeometry();
   const leafVeinGeometry = createLeafVeinGeometry();
   const leafVeinMaterial = new THREE.LineBasicMaterial({ color: new THREE.Color(plantColor).multiplyScalar(0.68), transparent: true, opacity: 0.42 });
+  const leafInstanceBatches = new Map<THREE.MeshPhysicalMaterial, THREE.Matrix4[]>();
   const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x526d3e, roughness: 0.86 });
   const veinMaterial = new THREE.MeshStandardMaterial({ color: 0xa45559, roughness: 0.76 });
-  const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage, showVein = false) => {
+  const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage, showVein = false, instanced = false, rotationX = 0): THREE.Mesh | null => {
+    const position = new THREE.Vector3(x, y, z);
+    const rotation = new THREE.Euler(-Math.sin(angle) * lean + rotationX, angle, Math.cos(angle) * lean);
+    const scale = new THREE.Vector3(width / 2, length, width / 5);
+    if (instanced) {
+      const batch = leafInstanceBatches.get(material) ?? [];
+      batch.push(new THREE.Matrix4().compose(position, new THREE.Quaternion().setFromEuler(rotation), scale));
+      leafInstanceBatches.set(material, batch);
+      return null;
+    }
     const blade = new THREE.Mesh(leafGeometry, material);
-    blade.scale.set(width / 2, length, width / 5);
-    blade.position.set(x, y, z);
-    blade.rotation.set(-Math.sin(angle) * lean, angle, Math.cos(angle) * lean);
+    blade.scale.copy(scale);
+    blade.position.copy(position);
+    blade.rotation.copy(rotation);
     if (showVein) blade.add(new THREE.Line(leafVeinGeometry, leafVeinMaterial));
     plant.add(blade);
     return blade;
@@ -159,7 +169,7 @@ export function createPlantModel(
       const position = curve.getPoint(index / (leafletCount + 1));
       const taper = Math.sin(Math.PI * index / (leafletCount + 1));
       for (const side of [-1, 1]) {
-        const leaflet = addBlade(
+        addBlade(
           position.x - direction.z * side * leafletSize * 0.42,
           position.y,
           position.z + direction.x * side * leafletSize * 0.42,
@@ -168,8 +178,10 @@ export function createPlantModel(
           angle + side * 0.72,
           side * 0.9,
           index % 2 ? foliage : foliageLight,
+          false,
+          true,
+          side * Math.cos(angle) * 0.3,
         );
-        leaflet.rotation.x = side * Math.cos(angle) * 0.3;
       }
     }
   };
@@ -247,7 +259,7 @@ export function createPlantModel(
         const stemEnd = new THREE.Vector3(Math.cos(angle) * 0.18, 0.42 + (stemIndex % 2) * 0.06, Math.sin(angle) * 0.18);
         addStem(new THREE.Vector3(0, 0.04, 0), stemEnd);
         const leaf = addBlade(stemEnd.x, stemEnd.y + 0.08, stemEnd.z, 0.34, 0.2, angle, Math.cos(angle) * 0.34, stemIndex % 2 ? foliageLight : foliage, true);
-        if (profile.silhouette === "prayer-leaves") {
+        if (profile.silhouette === "prayer-leaves" && leaf) {
           const vein = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.006, 0.27, 4), veinMaterial);
           vein.position.copy(leaf.position).add(new THREE.Vector3(0, -0.02, 0.012));
           vein.rotation.y = angle;
@@ -274,6 +286,8 @@ export function createPlantModel(
             leafAngle,
             Math.cos(leafAngle) * 0.3,
             leaf % 2 ? foliage : foliageLight,
+            false,
+            true,
           );
         }
       }
@@ -297,6 +311,8 @@ export function createPlantModel(
             bractAngle,
             Math.cos(bractAngle) * 0.94,
             bract % 2 ? foliageLight : foliage,
+            false,
+            true,
           );
         }
       }
@@ -304,14 +320,35 @@ export function createPlantModel(
     }
   }
 
+  leafInstanceBatches.forEach((matrices, material) => {
+    const instances = new THREE.InstancedMesh(leafGeometry, material, matrices.length);
+    matrices.forEach((matrix, index) => instances.setMatrixAt(index, matrix));
+    instances.instanceMatrix.needsUpdate = true;
+    instances.computeBoundingBox();
+    instances.computeBoundingSphere();
+    plant.add(instances);
+  });
+
   const geometryBounds = plantGeometryProfiles[profile.silhouette].bounds;
   const actualBounds = new THREE.Box3().setFromObject(plant);
   const center = actualBounds.getCenter(new THREE.Vector3());
   const size = actualBounds.getSize(new THREE.Vector3());
+  const centeringTransform = new THREE.Matrix4().makeTranslation(-center.x, -actualBounds.min.y, -center.z);
   plant.children.forEach((child) => {
-    child.position.x -= center.x;
-    child.position.y -= actualBounds.min.y;
-    child.position.z -= center.z;
+    if (child instanceof THREE.InstancedMesh) {
+      const instanceMatrix = new THREE.Matrix4();
+      for (let index = 0; index < child.count; index += 1) {
+        child.getMatrixAt(index, instanceMatrix);
+        child.setMatrixAt(index, instanceMatrix.premultiply(centeringTransform));
+      }
+      child.instanceMatrix.needsUpdate = true;
+      child.computeBoundingBox();
+      child.computeBoundingSphere();
+    } else {
+      child.position.x -= center.x;
+      child.position.y -= actualBounds.min.y;
+      child.position.z -= center.z;
+    }
   });
   const halfWidth = Math.max(Math.abs(actualBounds.min.x - center.x), Math.abs(actualBounds.max.x - center.x));
   const halfDepth = Math.max(Math.abs(actualBounds.min.z - center.z), Math.abs(actualBounds.max.z - center.z));
