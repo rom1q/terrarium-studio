@@ -52,7 +52,9 @@ describe("createHideModel", () => {
         if (object instanceof THREE.Mesh) exteriorMeshes.push(object);
       });
 
-      expect((exteriorMeshes[0].material as THREE.MeshStandardMaterial).bumpMap).toBe(texture);
+      const material = exteriorMeshes[0].material as THREE.MeshStandardMaterial;
+      expect(material.bumpMap).toBe(texture);
+      expect(material.bumpScale).toBeGreaterThanOrEqual(0.055);
     }
   });
 });

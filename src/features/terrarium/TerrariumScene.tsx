@@ -101,7 +101,7 @@ function createSurfaceNoiseTexture() {
       let noise = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263);
       noise = Math.imul(noise ^ (noise >>> 13), 1274126177);
       noise = (noise ^ (noise >>> 16)) >>> 0;
-      const tone = 116 + noise % 25;
+      const tone = 96 + noise % 65;
       const index = (y * size + x) * 4;
       data[index] = tone;
       data[index + 1] = tone;
@@ -113,7 +113,7 @@ function createSurfaceNoiseTexture() {
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(4, 4);
+  texture.repeat.set(2, 2);
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = true;
@@ -129,8 +129,8 @@ function createWoodGrainTexture() {
       let noise = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263);
       noise = Math.imul(noise ^ (noise >>> 13), 1274126177);
       noise = (noise ^ (noise >>> 16)) >>> 0;
-      const grain = Math.sin(x * 0.92 + Math.sin(y * 0.055) * 1.4) * 13;
-      const tone = THREE.MathUtils.clamp(128 + grain + (noise % 11) - 5, 0, 255);
+      const grain = Math.sin(x * 0.72 + Math.sin(y * 0.055) * 1.4) * 24;
+      const tone = THREE.MathUtils.clamp(128 + grain + (noise % 15) - 7, 0, 255);
       const index = (y * size + x) * 4;
       data[index] = tone;
       data[index + 1] = tone;
@@ -183,7 +183,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       camera.up.set(0, 0, -1);
       camera.position.set(0, 8.5, 0);
     } else {
-      camera.position.set(4.8, 3.8, 5.7);
+      camera.position.set(3.25, 2.87, 3.88);
     }
     if (previousView) {
       camera.position.set(...previousView.position);
@@ -329,7 +329,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       } else if (item.kind === "Branche") {
         const branch = new THREE.Group();
         const branchProfile = otherDecorationGeometryProfiles.branch[variant === "Branche droite" ? "straight" : "forked"];
-        const wood = new THREE.MeshStandardMaterial({ color: variant === "Branche droite" ? 0x805f42 : 0x705238, roughness: 0.94, bumpMap: woodGrainTexture, bumpScale: 0.016 });
+        const wood = new THREE.MeshStandardMaterial({ color: variant === "Branche droite" ? 0x805f42 : 0x705238, roughness: 0.94, bumpMap: woodGrainTexture, bumpScale: 0.06 });
         const addSegment = (start: THREE.Vector3, end: THREE.Vector3, radius: number) => {
           const direction = new THREE.Vector3().subVectors(end, start);
           const segment = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.72, radius, direction.length(), 8), wood);
@@ -346,7 +346,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       } else if (item.kind === "Plateforme") {
         const platform = new THREE.Group();
         const platformProfile = otherDecorationGeometryProfiles.platform;
-        const material = new THREE.MeshStandardMaterial({ color: variant === "Plateau en liège" ? 0x9a7855 : 0x806344, roughness: 0.92, bumpMap: woodGrainTexture, bumpScale: 0.012 });
+        const material = new THREE.MeshStandardMaterial({ color: variant === "Plateau en liège" ? 0x9a7855 : 0x806344, roughness: 0.92, bumpMap: woodGrainTexture, bumpScale: 0.04 });
         const slab = new THREE.Mesh(new THREE.BoxGeometry(platformProfile.slab.width, platformProfile.slab.height, platformProfile.slab.depth), material);
         slab.position.y = platformProfile.slab.y;
         platform.add(slab);

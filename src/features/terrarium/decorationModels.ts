@@ -47,7 +47,7 @@ function createFacetedGeometry(seed: number, baseColor: number) {
 
 export function createRockModel(variant: RockVariant, seed = 0, surfaceNoise?: THREE.Texture): THREE.Group {
   const rock = new THREE.Group();
-  const surfaceRelief = surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.018 } : {};
+  const surfaceRelief = surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.065 } : {};
 
   if (variant === "Galet") {
     const profile = rockGeometryProfiles.pebble;

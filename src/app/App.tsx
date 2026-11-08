@@ -94,6 +94,7 @@ const createDefaultDecorations = (): Decoration[] => [
   { id: 1, kind: "Plante", position: { x: -0.62, z: -0.42 } },
   { id: 2, kind: "Roche", position: { x: -0.5, z: 0.55 }, size: 70 },
   { id: 3, kind: "Cachette", position: { x: 0.38, z: -0.42 } },
+  { id: 4, kind: "Branche", variant: "Branche fourchue", position: { x: 0.45, y: 0, z: 0.7 } },
 ];
 
 const createDefaultMeasurements = (): Measurements => ({
@@ -136,7 +137,7 @@ function App() {
     lifeStage: initialProject?.lifeStage ?? "adult",
     measurements: initialProject?.measurements ?? createDefaultMeasurements(),
     decorations: initialProject?.decorations ?? createDefaultDecorations(),
-    nextId: initialProject?.nextId ?? 4,
+    nextId: initialProject?.nextId ?? 5,
   }, (project) => createProjectHistory(project, initialProject ? "Projet chargé" : "Projet initial"));
   const currentProjectHistoryEntry = projectHistory.entries[projectHistory.cursor];
   const { shape, biotope, dimensions, species, lifeStage, measurements, decorations, nextId } = currentProjectHistoryEntry.project;
@@ -640,7 +641,7 @@ function App() {
       lifeStage: "adult",
       measurements: createDefaultMeasurements(),
       decorations: createDefaultDecorations(),
-      nextId: 4,
+      nextId: 5,
     }, "Nouveau projet");
     selectDecoration(null);
     setViewMode("3d");

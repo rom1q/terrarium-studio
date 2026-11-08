@@ -110,6 +110,7 @@ describe("decoration layout validation", () => {
       { id: 1, kind: "Plante", position: { x: -0.62, z: -0.42 } },
       { id: 2, kind: "Roche", position: { x: -0.5, z: 0.55 }, size: 70 },
       { id: 3, kind: "Cachette", position: { x: 0.38, z: -0.42 } },
+      { id: 4, kind: "Branche", variant: "Branche fourchue", position: { x: 0.45, y: 0, z: 0.7 } },
     ];
     const warnings = analyzeDecorationLayout(starterDecorations, dimensions, "Basse", "Désertique");
 

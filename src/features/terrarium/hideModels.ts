@@ -23,7 +23,7 @@ function createCaveShell(surfaceNoise?: THREE.Texture) {
 
   const cave = new THREE.Mesh(
     new THREE.ExtrudeGeometry(silhouette, { depth: profile.depth, bevelEnabled: true, bevelSegments: 2, bevelSize: profile.bevel, bevelThickness: profile.bevel, curveSegments: profile.curveSegments }),
-    new THREE.MeshStandardMaterial({ color: 0x887967, roughness: 0.98, flatShading: true, ...(surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.014 } : {}) }),
+    new THREE.MeshStandardMaterial({ color: 0x887967, roughness: 0.98, flatShading: true, ...(surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.055 } : {}) }),
   );
   cave.position.z = profile.position.z;
   cave.position.y = profile.position.y;
@@ -33,7 +33,7 @@ function createCaveShell(surfaceNoise?: THREE.Texture) {
 function createTrunkShell(surfaceNoise?: THREE.Texture) {
   const profile = hideGeometryProfiles.trunk;
   const trunk = new THREE.Group();
-  const bark = new THREE.MeshStandardMaterial({ color: 0x76513a, roughness: 0.94, flatShading: true, ...(surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.022 } : {}) });
+  const bark = new THREE.MeshStandardMaterial({ color: 0x76513a, roughness: 0.94, flatShading: true, ...(surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.06 } : {}) });
   const interior = new THREE.MeshStandardMaterial({ color: 0x352a21, roughness: 1, side: THREE.DoubleSide });
   const outer = new THREE.Mesh(new THREE.CylinderGeometry(profile.outerRadii.top, profile.outerRadii.bottom, profile.length, profile.segments, 1, true), bark);
   const inner = new THREE.Mesh(new THREE.CylinderGeometry(profile.innerRadii.top, profile.innerRadii.bottom, profile.length, profile.segments, 1, true), interior);
@@ -55,7 +55,7 @@ function createTrunkShell(surfaceNoise?: THREE.Texture) {
 function createBarkShelter(surfaceNoise?: THREE.Texture) {
   const profile = hideGeometryProfiles.bark;
   const shelter = new THREE.Group();
-  const outerBark = new THREE.MeshStandardMaterial({ color: 0x785a3c, roughness: 0.98, side: THREE.DoubleSide, flatShading: true, ...(surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.022 } : {}) });
+  const outerBark = new THREE.MeshStandardMaterial({ color: 0x785a3c, roughness: 0.98, side: THREE.DoubleSide, flatShading: true, ...(surfaceNoise ? { bumpMap: surfaceNoise, bumpScale: 0.06 } : {}) });
   const innerBark = new THREE.MeshStandardMaterial({ color: 0x443329, roughness: 1, side: THREE.DoubleSide, flatShading: true });
   const outer = new THREE.Mesh(new THREE.CylinderGeometry(profile.outerRadius, profile.outerRadius, profile.length, profile.segments, 1, true, profile.thetaStart, profile.thetaLength), outerBark);
   const inner = new THREE.Mesh(new THREE.CylinderGeometry(profile.innerRadius, profile.innerRadius, profile.length, profile.segments, 1, true, profile.thetaStart, profile.thetaLength), innerBark);

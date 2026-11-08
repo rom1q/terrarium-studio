@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 test("a named checkpoint survives reload and restores the project", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Votre habitat" })).toBeVisible();
+  await expect(page.locator(".decor-item").filter({ hasText: "Branche · Branche fourchue" })).toHaveCount(1);
 
   await page.getByRole("button", { name: "Enregistrer le projet" }).click();
   const saveDialog = page.getByRole("dialog", { name: "Enregistrer le projet" });

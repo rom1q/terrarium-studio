@@ -52,7 +52,9 @@ describe("createRockModel", () => {
       const rock = createRockModel(variant, 1, texture);
       rock.traverse((object) => {
         if (!(object instanceof THREE.Mesh)) return;
-        expect((object.material as THREE.MeshStandardMaterial).bumpMap).toBe(texture);
+        const material = object.material as THREE.MeshStandardMaterial;
+        expect(material.bumpMap).toBe(texture);
+        expect(material.bumpScale).toBeGreaterThanOrEqual(0.06);
       });
     }
   });
