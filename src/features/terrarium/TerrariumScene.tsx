@@ -5,7 +5,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { getDefaultDecorationVariant, getEquipmentZoneSources, rotateDecoration, type Biotope, type Decoration, type HabitatZoneGuidance, type HabitatZoneKey, type Shape, type SpeciesProfile } from "../../domain/projectLogic";
 import { plantCatalog } from "../../data/plantCatalog";
-import { createPlantModel } from "./plantModels";
+import { createPlantModel, getPlantSway } from "./plantModels";
 import { createRockModel } from "./decorationModels";
 import { createHideModel } from "./hideModels";
 import { getTerrariumSceneDimensions, type LayoutSuggestion, type LayoutWarning } from "../../domain/layoutValidation";
@@ -300,6 +300,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
 
     const decorationObjects: THREE.Object3D[] = [];
     const decorationObjectsById = new Map<number, THREE.Object3D>();
+    const animatedPlants: { model: THREE.Group; phase: number; baseRotation: THREE.Euler }[] = [];
     decorations.forEach((item) => {
       const x = item.position.x * widthHalf;
       const z = item.position.z * depthHalf;
@@ -322,6 +323,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       };
       if (item.kind === "Plante") {
         const plant = createPlantModel(plantProfile?.visual, variant, colors.plant);
+        animatedPlants.push({ model: plant, phase: item.id * 2.399, baseRotation: plant.rotation.clone() });
         addDecorationObject(plant);
       } else if (item.kind === "Cachette") {
         const hide = createHideModel(variant as "Grotte" | "Tronc creux" | "Écorce creuse", surfaceNoiseTexture);
@@ -699,9 +701,16 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     resize();
 
     let frame = 0;
+    const animationStartedAt = performance.now();
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const animate = () => {
       frame = requestAnimationFrame(animate);
       controls.update();
+      const timeSeconds = (performance.now() - animationStartedAt) / 1000;
+      animatedPlants.forEach(({ model, phase, baseRotation }) => {
+        const sway = viewMode === "3d" && !prefersReducedMotion ? getPlantSway(timeSeconds, phase) : { rotationX: 0, rotationZ: 0 };
+        model.rotation.set(baseRotation.x + sway.rotationX, baseRotation.y, baseRotation.z + sway.rotationZ);
+      });
       renderer.render(scene, camera);
     };
     animate();

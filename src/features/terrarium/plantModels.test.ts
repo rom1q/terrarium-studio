@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { plantCatalog } from "../../data/plantCatalog";
-import { createPlantModel } from "./plantModels";
+import { createPlantModel, getPlantSway } from "./plantModels";
 
 describe("species-specific plant models", () => {
   it("creates a distinct non-empty model for each catalog profile", () => {
@@ -61,5 +61,13 @@ describe("species-specific plant models", () => {
     });
 
     expect(veinCount).toBeGreaterThan(0);
+  });
+
+  it("keeps plant wind subtle, bounded, and deterministic", () => {
+    const first = getPlantSway(4.2, 1.7);
+
+    expect(getPlantSway(4.2, 1.7)).toEqual(first);
+    expect(Math.abs(first.rotationX)).toBeLessThanOrEqual(0.012);
+    expect(Math.abs(first.rotationZ)).toBeLessThanOrEqual(0.024);
   });
 });

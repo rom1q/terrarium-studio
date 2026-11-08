@@ -51,6 +51,15 @@ function createLeafVeinGeometry() {
   return new THREE.BufferGeometry().setFromPoints(curve.getPoints(8));
 }
 
+export type PlantSway = { rotationX: number; rotationZ: number };
+
+export function getPlantSway(timeSeconds: number, phase: number): PlantSway {
+  return {
+    rotationX: Math.sin(timeSeconds * 0.9 + phase) * 0.012,
+    rotationZ: Math.sin(timeSeconds * 1.35 + phase) * 0.024,
+  };
+}
+
 export function createPlantModel(
   visualProfile: PlantVisualProfile | undefined,
   variant: DecorationVariant,
