@@ -241,12 +241,28 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
     const scatter = createSubstrateScatter(substrateProfile, width, depth, floorY + 0.1);
     if (scatter) scene.add(scatter);
 
+    let waterRipples: THREE.Texture | undefined;
     if (biotope === "Paludarium") {
+      const poolWidth = width * 0.4;
+      const poolDepth = depth * 0.94;
+      const surfaceY = floorY + 0.1;
+      const addPoolLayer = (layerWidth: number, layerDepth: number, color: number, opacity: number, y: number, order: number) => {
+        const layer = new THREE.Mesh(new THREE.PlaneGeometry(layerWidth, layerDepth), new THREE.MeshStandardMaterial({ color, transparent: true, opacity, roughness: 1, depthWrite: false }));
+        layer.rotation.x = -Math.PI / 2;
+        layer.position.set(width * 0.28, y, 0);
+        layer.renderOrder = order;
+        scene.add(layer);
+      };
+      addPoolLayer(poolWidth + 0.1, poolDepth + 0.1, 0x2f261d, 0.4, surfaceY + 0.001, 1);
+      addPoolLayer(poolWidth, poolDepth, 0x1f2f2a, 0.6, surfaceY + 0.002, 2);
+      waterRipples = createSubstrateTexture("fine-sand");
+      waterRipples.repeat.set(3, 6);
       const water = new THREE.Mesh(
-        new THREE.BoxGeometry(width * 0.4, 0.045, depth * 0.94),
-        new THREE.MeshPhysicalMaterial({ color: colors.water, roughness: 0.16, metalness: 0.12 }),
+        new THREE.BoxGeometry(poolWidth, 0.045, poolDepth),
+        new THREE.MeshPhysicalMaterial({ color: colors.water, transparent: true, opacity: 0.5, roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, bumpMap: waterRipples, bumpScale: 0.012, depthWrite: false }),
       );
       water.position.set(width * 0.28, floorY + 0.13, 0);
+      water.renderOrder = 3;
       scene.add(water);
     }
 
@@ -675,6 +691,7 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
       frame = requestAnimationFrame(animate);
       controls.update();
       const timeSeconds = (performance.now() - animationStartedAt) / 1000;
+      if (waterRipples && viewMode === "3d" && !prefersReducedMotion) waterRipples.offset.set(timeSeconds * 0.006, timeSeconds * 0.011);
       animatedPlants.forEach(({ model, phase, baseRotation }) => {
         const sway = viewMode === "3d" && !prefersReducedMotion ? getPlantSway(timeSeconds, phase) : { rotationX: 0, rotationZ: 0 };
         model.rotation.set(baseRotation.x + sway.rotationX, baseRotation.y, baseRotation.z + sway.rotationZ);
@@ -710,6 +727,7 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
       });
       contactShadowTexture?.dispose();
       substrateTexture.dispose();
+      waterRipples?.dispose();
       surfaceNoiseTexture.dispose();
       woodGrainTexture.dispose();
     };
