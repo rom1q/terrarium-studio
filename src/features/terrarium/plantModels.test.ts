@@ -35,6 +35,22 @@ describe("species-specific plant models", () => {
     expect(new Set([fern.scale.y, rosette.scale.y, foliage.scale.y]).size).toBeGreaterThan(1);
   });
 
+  it("builds grass and strap leaves as finite flat ribbons instead of tubes", () => {
+    const ribbonProfiles = plantCatalog.filter((profile) => ["grass-clump", "arching-straps", "bird-nest"].includes(profile.visual.silhouette));
+    expect(ribbonProfiles.length).toBeGreaterThan(0);
+    for (const profile of ribbonProfiles) {
+      const model = createPlantModel(profile.visual, profile.visualVariant, 0x65804b);
+      let tubes = 0;
+      model.traverse((object) => {
+        if (object instanceof THREE.Mesh && object.geometry.type === "TubeGeometry") tubes += 1;
+      });
+      const box = new THREE.Box3().setFromObject(model);
+      expect(box.min.toArray().concat(box.max.toArray()).every(Number.isFinite)).toBe(true);
+      expect(box.getSize(new THREE.Vector3()).y).toBeGreaterThan(0.2);
+      expect(tubes).toBe(0);
+    }
+  });
+
   it("uses distinct natural leaf tones in the same model", () => {
     const fern = createPlantModel(undefined, "Fougère", 0x65804b);
     const leafColors = new Set<number>();

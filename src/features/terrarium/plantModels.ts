@@ -7,7 +7,26 @@ const fallbackProfiles: Record<"Feuillage dense" | "Fougère" | "Rosette", Plant
   Fougère: { silhouette: "fern", heightScale: 1, spreadScale: 1, density: 7 },
   Rosette: { silhouette: "rosette", heightScale: 0.65, spreadScale: 0.9, density: 10 },
 };
-let sharedLeafDetailTexture: THREE.DataTexture | undefined;
+type LeafTextureKind = "pinnate" | "parallel";
+const sharedLeafDetailTextures: Partial<Record<LeafTextureKind, THREE.DataTexture>> = {};
+
+function hashCell(x: number, y: number, seed: number) {
+  let value = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263) + Math.imul(seed + 1, 2246822519);
+  value = Math.imul(value ^ (value >>> 13), 1274126177);
+  return ((value ^ (value >>> 16)) >>> 0) / 4294967295;
+}
+
+function smoothNoise(x: number, y: number, seed: number) {
+  const cellX = Math.floor(x);
+  const cellY = Math.floor(y);
+  const fx = x - cellX;
+  const fy = y - cellY;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const top = hashCell(cellX, cellY, seed) * (1 - sx) + hashCell(cellX + 1, cellY, seed) * sx;
+  const bottom = hashCell(cellX, cellY + 1, seed) * (1 - sx) + hashCell(cellX + 1, cellY + 1, seed) * sx;
+  return top * (1 - sy) + bottom * sy;
+}
 
 function createTaperedLeafGeometry() {
   const widthSegments = 6;
@@ -44,6 +63,49 @@ function createTaperedLeafGeometry() {
   return geometry;
 }
 
+function createRibbonBladeGeometry(curve: THREE.Curve<THREE.Vector3>, baseWidth: number, shape: "blade" | "strap", ripple = 0) {
+  const segments = 14;
+  const vertices: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const start = curve.getPoint(0);
+  const outward = new THREE.Vector3(curve.getPoint(1).x - start.x, 0, curve.getPoint(1).z - start.z).normalize();
+  const side = new THREE.Vector3(-outward.z, 0, outward.x);
+
+  for (let index = 0; index <= segments; index += 1) {
+    const along = index / segments;
+    const point = curve.getPoint(along);
+    const tangent = curve.getTangent(along);
+    const normal = new THREE.Vector3().crossVectors(tangent, side).normalize();
+    const taper = shape === "strap" ? Math.pow(Math.sin(Math.PI * Math.min(0.5 + along * 0.5, 1)), 0.7) * (0.55 + Math.sin(Math.PI * along) * 0.45) : Math.pow(1 - along, 0.65) * Math.min(1, 0.45 + along * 6);
+    const halfWidth = baseWidth * Math.max(taper, 0.02);
+    const twist = along * 0.35;
+    for (const across of [-1, 0, 1]) {
+      const fold = (1 - Math.abs(across) * 0.5) * halfWidth * 0.28;
+      const wave = ripple * Math.sin(along * Math.PI * 7) * Math.abs(across) * halfWidth;
+      const offset = side.clone().multiplyScalar(across * halfWidth * Math.cos(twist)).addScaledVector(normal, fold + wave);
+      vertices.push(point.x + offset.x, point.y + offset.y, point.z + offset.z);
+      uvs.push((across + 1) / 2, along);
+    }
+  }
+
+  for (let index = 0; index < segments; index += 1) {
+    const lower = index * 3;
+    for (let column = 0; column < 2; column += 1) {
+      const a = lower + column;
+      const b = a + 3;
+      indices.push(a, a + 1, b, a + 1, b + 1, b);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 function createLeafVeinGeometry() {
   const curve = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0, -0.44, 0.08),
@@ -55,42 +117,60 @@ function createLeafVeinGeometry() {
   return new THREE.BufferGeometry().setFromPoints(curve.getPoints(8));
 }
 
-function getLeafDetailTexture() {
-  if (sharedLeafDetailTexture) return sharedLeafDetailTexture;
-  const width = 64;
-  const height = 128;
+// The red channel doubles as the bump height, so veins are darker in red to read as grooves.
+function getLeafDetailTexture(kind: LeafTextureKind = "pinnate") {
+  const cached = sharedLeafDetailTextures[kind];
+  if (cached) return cached;
+  const width = 128;
+  const height = 256;
   const data = new Uint8Array(width * height * 4);
+  const seed = kind === "pinnate" ? 3 : 11;
   for (let y = 0; y < height; y += 1) {
     const alongLeaf = y / (height - 1);
     for (let x = 0; x < width; x += 1) {
       const acrossLeaf = x / (width - 1);
-      let tone = 244;
-      if (Math.abs(acrossLeaf - 0.5) < 0.014) tone = 192;
-      for (let vein = 0; vein < 8; vein += 1) {
-        const progress = (alongLeaf - (0.08 + vein * 0.105)) / 0.075;
-        if (progress < 0 || progress > 1) continue;
-        const branch = 0.055 + progress * 0.37;
-        if (Math.abs(Math.abs(acrossLeaf - 0.5) - branch) < 0.009) tone = Math.min(tone, 215);
+      const edge = Math.abs(acrossLeaf - 0.5) * 2;
+      const mottle = smoothNoise(acrossLeaf * 5, alongLeaf * 9, seed) * 0.65 + smoothNoise(acrossLeaf * 14, alongLeaf * 24, seed + 1) * 0.35 - 0.5;
+      const streak = kind === "parallel" ? smoothNoise(acrossLeaf * 46, alongLeaf * 3, seed + 2) - 0.5 : 0;
+      let tone = 0.93 + mottle * 0.1 + streak * 0.07 - Math.pow(edge, 3) * 0.14 + (alongLeaf - 0.5) * 0.04;
+      let vein = 0;
+
+      if (kind === "pinnate") {
+        if (Math.abs(acrossLeaf - 0.5) < 0.015) vein = 1;
+        for (let index = 0; index < 8; index += 1) {
+          const progress = (alongLeaf - (0.08 + index * 0.105)) / 0.075;
+          if (progress < 0 || progress > 1) continue;
+          const branch = 0.055 + progress * 0.37;
+          if (Math.abs(Math.abs(acrossLeaf - 0.5) - branch) < 0.009) vein = Math.max(vein, 0.55);
+        }
+      } else {
+        const lane = acrossLeaf * 11;
+        const distance = Math.abs(lane - Math.round(lane));
+        if (distance < 0.07 + hashCell(Math.round(lane), 0, seed) * 0.05) vein = 0.5;
+        if (alongLeaf < 0.1) tone += (0.1 - alongLeaf) * 1.4;
       }
-      let noise = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263);
-      noise = Math.imul(noise ^ (noise >>> 13), 1274126177);
-      noise = (noise ^ (noise >>> 16)) >>> 0;
-      tone = THREE.MathUtils.clamp(tone + (noise % 7) - 3, 0, 255);
+
+      const hueShift = (smoothNoise(acrossLeaf * 4, alongLeaf * 6, seed + 3) - 0.5) * 0.08;
+      const grain = (hashCell(x, y, seed + 4) - 0.5) * 0.025;
+      const red = (tone * (1 - vein * 0.16) + hueShift + grain) * 238;
+      const green = (tone * (1 - vein * 0.04) + grain) * 250;
+      const blue = (tone * (1 - vein * 0.12) - hueShift * 1.2 + grain) * 226;
       const pixel = (y * width + x) * 4;
-      data[pixel] = tone;
-      data[pixel + 1] = tone;
-      data[pixel + 2] = tone;
+      data[pixel] = THREE.MathUtils.clamp(red, 0, 255);
+      data[pixel + 1] = THREE.MathUtils.clamp(green, 0, 255);
+      data[pixel + 2] = THREE.MathUtils.clamp(blue, 0, 255);
       data[pixel + 3] = 255;
     }
   }
 
-  sharedLeafDetailTexture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-  sharedLeafDetailTexture.colorSpace = THREE.SRGBColorSpace;
-  sharedLeafDetailTexture.minFilter = THREE.LinearMipmapLinearFilter;
-  sharedLeafDetailTexture.magFilter = THREE.LinearFilter;
-  sharedLeafDetailTexture.generateMipmaps = true;
-  sharedLeafDetailTexture.needsUpdate = true;
-  return sharedLeafDetailTexture;
+  const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  sharedLeafDetailTextures[kind] = texture;
+  return texture;
 }
 
 export type PlantSway = { rotationX: number; rotationZ: number };
@@ -110,11 +190,10 @@ export function createPlantModel(
   const profile = visualProfile ?? fallbackProfiles[variant as keyof typeof fallbackProfiles] ?? fallbackProfiles["Feuillage dense"];
   const plant = new THREE.Group();
   const foliageHighlight = new THREE.Color(plantColor).lerp(new THREE.Color(0xc3ce85), 0.22);
-  const leafDetailTexture = getLeafDetailTexture();
-  const createFoliageMaterial = (color: THREE.ColorRepresentation, roughness: number) => new THREE.MeshPhysicalMaterial({
+  const createFoliageMaterial = (color: THREE.ColorRepresentation, roughness: number, texture = getLeafDetailTexture("pinnate")) => new THREE.MeshPhysicalMaterial({
     color,
-    map: leafDetailTexture,
-    bumpMap: leafDetailTexture,
+    map: texture,
+    bumpMap: texture,
     bumpScale: 0.008,
     roughness,
     side: THREE.DoubleSide,
@@ -124,11 +203,14 @@ export function createPlantModel(
   });
   const foliage = createFoliageMaterial(plantColor, 0.7);
   const foliageLight = createFoliageMaterial(foliageHighlight, 0.74);
+  const parallelTexture = getLeafDetailTexture("parallel");
+  const strapFoliage = createFoliageMaterial(plantColor, 0.66, parallelTexture);
+  const strapFoliageLight = createFoliageMaterial(foliageHighlight, 0.7, parallelTexture);
   const leafGeometry = createTaperedLeafGeometry();
   const leafVeinGeometry = createLeafVeinGeometry();
   const leafVeinMaterial = new THREE.LineBasicMaterial({ color: new THREE.Color(plantColor).multiplyScalar(0.68), transparent: true, opacity: 0.42 });
   const leafInstanceBatches = new Map<THREE.MeshPhysicalMaterial, THREE.Matrix4[]>();
-  const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x526d3e, roughness: 0.86 });
+  const stemMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(plantColor).lerp(new THREE.Color(0x6b5a34), 0.4), roughness: 0.82 });
   const veinMaterial = new THREE.MeshStandardMaterial({ color: 0xa45559, roughness: 0.76 });
   const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage, showVein = false, instanced = false, rotationX = 0): THREE.Mesh | null => {
     const position = new THREE.Vector3(x, y, z);
@@ -230,7 +312,7 @@ export function createPlantModel(
           new THREE.Vector3(Math.cos(angle) * 0.25, length, Math.sin(angle) * 0.25),
           new THREE.Vector3(Math.cos(angle) * 0.42, length * 0.72, Math.sin(angle) * 0.42),
         ]);
-        plant.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 10, 0.033, 6, false), foliage));
+        plant.add(new THREE.Mesh(createRibbonBladeGeometry(curve, 0.075, "strap", 0.22), index % 2 ? foliageLight : foliage));
       }
       break;
     }
@@ -246,8 +328,9 @@ export function createPlantModel(
           new THREE.Vector3(Math.cos(angle) * reach * 0.3, height * 0.72, Math.sin(angle) * reach * 0.3),
           new THREE.Vector3(Math.cos(angle) * reach, height * 0.7, Math.sin(angle) * reach),
         ]);
-        const bladeMaterial = index % 2 ? foliageLight : foliage;
-        plant.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 8, profile.silhouette === "grass-clump" ? 0.018 : 0.027, 5, false), bladeMaterial));
+        const bladeMaterial = index % 2 ? strapFoliageLight : strapFoliage;
+        const isGrass = profile.silhouette === "grass-clump";
+        plant.add(new THREE.Mesh(createRibbonBladeGeometry(curve, isGrass ? 0.03 : 0.062, isGrass ? "blade" : "strap"), bladeMaterial));
       }
       break;
     }
@@ -322,8 +405,14 @@ export function createPlantModel(
 
   leafInstanceBatches.forEach((matrices, material) => {
     const instances = new THREE.InstancedMesh(leafGeometry, material, matrices.length);
-    matrices.forEach((matrix, index) => instances.setMatrixAt(index, matrix));
+    const tint = new THREE.Color();
+    matrices.forEach((matrix, index) => {
+      instances.setMatrixAt(index, matrix);
+      const shade = 0.88 + (Math.sin(index * 12.9898) * 43758.5453 % 1 + 1) % 1 * 0.2;
+      instances.setColorAt(index, tint.setRGB(shade, shade * 1.02, shade * 0.94));
+    });
     instances.instanceMatrix.needsUpdate = true;
+    if (instances.instanceColor) instances.instanceColor.needsUpdate = true;
     instances.computeBoundingBox();
     instances.computeBoundingSphere();
     plant.add(instances);
