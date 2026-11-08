@@ -40,6 +40,17 @@ function createTaperedLeafGeometry() {
   return geometry;
 }
 
+function createLeafVeinGeometry() {
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, -0.44, 0.08),
+    new THREE.Vector3(0, -0.22, 0.28),
+    new THREE.Vector3(0, 0, 0.36),
+    new THREE.Vector3(0, 0.22, 0.28),
+    new THREE.Vector3(0, 0.44, 0.08),
+  ]);
+  return new THREE.BufferGeometry().setFromPoints(curve.getPoints(8));
+}
+
 export function createPlantModel(
   visualProfile: PlantVisualProfile | undefined,
   variant: DecorationVariant,
@@ -51,13 +62,16 @@ export function createPlantModel(
   const foliage = new THREE.MeshStandardMaterial({ color: plantColor, roughness: 0.78, side: THREE.DoubleSide });
   const foliageLight = new THREE.MeshStandardMaterial({ color: foliageHighlight, roughness: 0.82, side: THREE.DoubleSide });
   const leafGeometry = createTaperedLeafGeometry();
+  const leafVeinGeometry = createLeafVeinGeometry();
+  const leafVeinMaterial = new THREE.LineBasicMaterial({ color: new THREE.Color(plantColor).multiplyScalar(0.68), transparent: true, opacity: 0.42 });
   const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x526d3e, roughness: 0.86 });
   const veinMaterial = new THREE.MeshStandardMaterial({ color: 0xa45559, roughness: 0.76 });
-  const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage) => {
+  const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage, showVein = false) => {
     const blade = new THREE.Mesh(leafGeometry, material);
     blade.scale.set(width / 2, length, width / 5);
     blade.position.set(x, y, z);
     blade.rotation.set(-Math.sin(angle) * lean, angle, Math.cos(angle) * lean);
+    if (showVein) blade.add(new THREE.Line(leafVeinGeometry, leafVeinMaterial));
     plant.add(blade);
     return blade;
   };
@@ -120,6 +134,7 @@ export function createPlantModel(
           angle,
           Math.cos(angle) * lean,
           index % 2 ? foliageLight : foliage,
+          true,
         );
       }
       break;
@@ -168,7 +183,7 @@ export function createPlantModel(
         const angle = stemIndex * Math.PI * 2 / stemCount;
         const stemEnd = new THREE.Vector3(Math.cos(angle) * 0.18, 0.42 + (stemIndex % 2) * 0.06, Math.sin(angle) * 0.18);
         addStem(new THREE.Vector3(0, 0.04, 0), stemEnd);
-        const leaf = addBlade(stemEnd.x, stemEnd.y + 0.08, stemEnd.z, 0.34, 0.2, angle, Math.cos(angle) * 0.34, stemIndex % 2 ? foliageLight : foliage);
+        const leaf = addBlade(stemEnd.x, stemEnd.y + 0.08, stemEnd.z, 0.34, 0.2, angle, Math.cos(angle) * 0.34, stemIndex % 2 ? foliageLight : foliage, true);
         if (profile.silhouette === "prayer-leaves") {
           const vein = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.006, 0.27, 4), veinMaterial);
           vein.position.copy(leaf.position).add(new THREE.Vector3(0, -0.02, 0.012));

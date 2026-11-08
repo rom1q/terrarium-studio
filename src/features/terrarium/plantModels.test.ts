@@ -52,4 +52,14 @@ describe("species-specific plant models", () => {
     expect(leafGeometry?.getAttribute("position").count).toBeGreaterThan(80);
     expect(leafGeometry?.getIndex()?.count).toBeGreaterThan(300);
   });
+
+  it("adds subtle central veins to broad rosette leaves", () => {
+    const rosette = createPlantModel(undefined, "Rosette", 0x65804b);
+    let veinCount = 0;
+    rosette.traverse((object) => {
+      if (object instanceof THREE.Line) veinCount += 1;
+    });
+
+    expect(veinCount).toBeGreaterThan(0);
+  });
 });
