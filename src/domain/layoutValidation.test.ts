@@ -35,7 +35,7 @@ describe("decoration layout validation", () => {
     ];
     const wallWarnings = analyzeDecorationLayout(edgeDecorations, dimensions, "Basse").boundaries.map((warning) => warning.message).join(" ");
     const verticalWarnings = analyzeDecorationLayout([
-      { id: 5, kind: "Lampe chauffante", position: { x: 0, y: 0, z: 0 } },
+      { id: 5, kind: "Lampe chauffante", position: { x: 0, y: -0.1, z: 0 } },
       { id: 6, kind: "Lampe chauffante", position: { x: 0, y: 1, z: 0 } },
     ], dimensions, "Basse").boundaries.map((warning) => warning.message).join(" ");
 
@@ -45,6 +45,16 @@ describe("decoration layout validation", () => {
     expect(wallWarnings).toContain("paroi avant");
     expect(verticalWarnings).toContain("sous le sol");
     expect(verticalWarnings).toContain("au-dessus du plafond");
+  });
+
+  it("keeps height-zero decorations on the floor at every supported size", () => {
+    const kinds: Decoration["kind"][] = ["Plante", "Roche", "Cachette", "Branche", "Plateforme", "Gamelle", "Lampe chauffante", "Tube UVB"];
+
+    kinds.forEach((kind) => [50, 100, 150].forEach((size) => {
+      const item: Decoration = { id: size, kind, position: { x: 0, y: 0, z: 0 }, size };
+      const warnings = analyzeDecorationLayout([item], dimensions, "Basse");
+      expect(warnings.boundaries.some((warning) => warning.message.includes("sous le sol")), `${kind} at ${size}%`).toBe(false);
+    }));
   });
 
   it("detects intersecting objects and a hide entrance blocked by another object", () => {

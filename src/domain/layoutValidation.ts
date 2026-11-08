@@ -37,7 +37,7 @@ function getPositionedBounds(
   const centerX = (item.position.x + 1) * dimensions.width / 2;
   const centerZ = (item.position.z + 1) * dimensions.depth / 2;
   const worldToCentimetersY = dimensions.height / sceneDimensions.height;
-  const baseY = (item.position.y ?? 0) * dimensions.height + profile.rootOffsetY * worldToCentimetersY;
+  const baseY = (item.position.y ?? 0) * dimensions.height + profile.rootOffsetY * size * worldToCentimetersY;
   return {
     item,
     label,
@@ -62,6 +62,7 @@ function rotatePoint(x: number, z: number, rotation: number) {
 function getOpeningBounds(
   item: Decoration,
   opening: ModelOpening,
+  rootOffsetY: number,
   dimensions: { width: number; depth: number; height: number },
   sceneDimensions: TerrariumSceneDimensions,
 ): Bounds3D {
@@ -74,8 +75,8 @@ function getOpeningBounds(
   const halfDepth = (Math.abs(Math.sin(rotation)) * localHalfWidth + Math.abs(Math.cos(rotation)) * localHalfDepth) * size * dimensions.depth / sceneDimensions.depth;
   const centerX = (item.position.x + 1) * dimensions.width / 2 + center.x * size * dimensions.width / sceneDimensions.width;
   const centerZ = (item.position.z + 1) * dimensions.depth / 2 + center.z * size * dimensions.depth / sceneDimensions.depth;
-  const baseY = (item.position.y ?? 0) * dimensions.height;
   const worldToCentimetersY = dimensions.height / sceneDimensions.height;
+  const baseY = (item.position.y ?? 0) * dimensions.height + rootOffsetY * size * worldToCentimetersY;
   return {
     minX: centerX - halfWidth,
     maxX: centerX + halfWidth,
@@ -160,7 +161,7 @@ function getDecorationLayoutWarnings(
 
   objects.forEach(({ item, label, profile }) => {
     for (const opening of profile.openings) {
-      const openingBounds = getOpeningBounds(item, opening, dimensions, sceneDimensions);
+      const openingBounds = getOpeningBounds(item, opening, profile.rootOffsetY, dimensions, sceneDimensions);
       const blocker = objects.find((candidate) => candidate.item.id !== item.id && intersects(openingBounds, candidate.bounds, 2));
       if (blocker) {
         clearances.push({

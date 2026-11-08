@@ -115,7 +115,7 @@ export const otherDecorationGeometryProfiles = {
   },
 } as const;
 
-function makeProfile(bounds: LocalModelBounds, rootOffsetY = 0, openings: readonly ModelOpening[] = []): DecorationGeometryProfile {
+function makeProfile(bounds: LocalModelBounds, rootOffsetY = -bounds.minY, openings: readonly ModelOpening[] = []): DecorationGeometryProfile {
   return { bounds, rootOffsetY, openings };
 }
 
@@ -144,7 +144,7 @@ export function getDecorationGeometryProfile(item: Decoration, biotope: Biotope)
     }
     case "Cachette": {
       const profile = item.variant === "Tronc creux" ? hideGeometryProfiles.trunk : item.variant === "Écorce creuse" ? hideGeometryProfiles.bark : hideGeometryProfiles.cave;
-      return makeProfile(profile.bounds, 0, profile.openings);
+      return makeProfile(profile.bounds, -profile.bounds.minY, profile.openings);
     }
     case "Branche":
       return makeProfile((item.variant === "Branche droite" ? otherDecorationGeometryProfiles.branch.straight : otherDecorationGeometryProfiles.branch.forked).bounds);
