@@ -385,7 +385,10 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
       }
     });
     decorationObjects.forEach((object) => object.traverse((part) => {
-      if (part instanceof THREE.Mesh) part.castShadow = true;
+      if (part instanceof THREE.Mesh) {
+        part.castShadow = true;
+        part.receiveShadow = true;
+      }
     }));
 
     const backgroundGrid = new THREE.GridHelper(12, 24, 0xadb8aa, 0xcbd1c7);
