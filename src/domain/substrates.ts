@@ -28,7 +28,7 @@ export const substrateCatalog = {
   },
   "Argile rouge": {
     description: "Terre argileuse ocre-rouge, compacte et sèche. Rendu de sol aride et fissuré.",
-    drainage: "Lent", moisture: "Faible", color: 0xa85b3c, roughness: 0.97, texture: "soil",
+    drainage: "Lent", moisture: "Faible", color: 0x94644a, roughness: 0.97, texture: "soil",
   },
   "Terreau tropical": {
     description: "Terreau organique aéré, brun foncé. Garde l’humidité tout en restant drainant.",
@@ -42,8 +42,8 @@ export const substrateCatalog = {
   },
   "Écorce de pin": {
     description: "Morceaux d’écorce drainants, aspect sous-bois. Sèche plus vite qu’un terreau.",
-    drainage: "Rapide", moisture: "Moyenne", color: 0x6f4a31, roughness: 0.96, texture: "bark",
-    scatter: { shape: "chunk", colors: [0x84563a, 0x5e3b27, 0x9a6a46, 0x6f4a31], size: 0.034, density: 240 },
+    drainage: "Rapide", moisture: "Moyenne", color: 0x7a5236, roughness: 0.96, texture: "bark",
+    scatter: { shape: "chunk", colors: [0x8f6140, 0x6a4529, 0xa4724c, 0x7a5236], size: 0.052, density: 320 },
   },
   "Mousse sphaigne": {
     description: "Mousse pâle qui retient fortement l’humidité; rendu de litière de sous-bois humide.",

@@ -55,7 +55,7 @@ function sampleTone(kind: SubstrateTexture, u: number, v: number, pixelHash: num
   switch (kind) {
     case "fine-sand": {
       const ripples = periodicNoise(u * 0.5 + v * 0.1, v * 0.5, 6, 1);
-      return 0.86 + ripples * 0.08 + (pixelHash - 0.5) * 0.12;
+      return 0.8 + ripples * 0.2 + (pixelHash - 0.5) * 0.12;
     }
     case "soil": {
       const crumbs = periodicNoise(u, v, 16, 2) * 0.6 + periodicNoise(u, v, 40, 3) * 0.4;
