@@ -40,4 +40,16 @@ describe("species-specific plant models", () => {
 
     expect(leafColors.size).toBeGreaterThan(1);
   });
+
+  it("uses pointed leaf geometry with a curved surface", () => {
+    const fern = createPlantModel(undefined, "Fougère", 0x65804b);
+    let leafGeometry: THREE.BufferGeometry | undefined;
+    fern.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.geometry.type === "BufferGeometry") leafGeometry ??= object.geometry;
+    });
+
+    expect(leafGeometry).toBeDefined();
+    expect(leafGeometry?.getAttribute("position").count).toBeGreaterThan(80);
+    expect(leafGeometry?.getIndex()?.count).toBeGreaterThan(300);
+  });
 });

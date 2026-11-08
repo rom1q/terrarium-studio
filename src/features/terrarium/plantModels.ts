@@ -8,6 +8,38 @@ const fallbackProfiles: Record<"Feuillage dense" | "Fougère" | "Rosette", Plant
   Rosette: { silhouette: "rosette", heightScale: 0.65, spreadScale: 0.9, density: 10 },
 };
 
+function createTaperedLeafGeometry() {
+  const widthSegments = 6;
+  const lengthSegments = 12;
+  const vertices: number[] = [];
+  const indices: number[] = [];
+
+  for (let lengthIndex = 0; lengthIndex <= lengthSegments; lengthIndex += 1) {
+    const alongLeaf = lengthIndex / lengthSegments;
+    const taper = Math.pow(Math.sin(Math.PI * alongLeaf), 0.72);
+    for (let widthIndex = 0; widthIndex <= widthSegments; widthIndex += 1) {
+      const acrossLeaf = widthIndex / widthSegments * 2 - 1;
+      const width = acrossLeaf * taper;
+      const curve = (1 - acrossLeaf * acrossLeaf) * Math.sin(Math.PI * alongLeaf) * 0.35;
+      vertices.push(width, alongLeaf - 0.5, curve);
+    }
+  }
+
+  for (let lengthIndex = 0; lengthIndex < lengthSegments; lengthIndex += 1) {
+    for (let widthIndex = 0; widthIndex < widthSegments; widthIndex += 1) {
+      const lowerLeft = lengthIndex * (widthSegments + 1) + widthIndex;
+      const upperLeft = lowerLeft + widthSegments + 1;
+      indices.push(lowerLeft, lowerLeft + 1, upperLeft, lowerLeft + 1, upperLeft + 1, upperLeft);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 export function createPlantModel(
   visualProfile: PlantVisualProfile | undefined,
   variant: DecorationVariant,
@@ -18,11 +50,12 @@ export function createPlantModel(
   const foliageHighlight = new THREE.Color(plantColor).lerp(new THREE.Color(0xc3ce85), 0.22);
   const foliage = new THREE.MeshStandardMaterial({ color: plantColor, roughness: 0.78, side: THREE.DoubleSide });
   const foliageLight = new THREE.MeshStandardMaterial({ color: foliageHighlight, roughness: 0.82, side: THREE.DoubleSide });
+  const leafGeometry = createTaperedLeafGeometry();
   const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x526d3e, roughness: 0.86 });
   const veinMaterial = new THREE.MeshStandardMaterial({ color: 0xa45559, roughness: 0.76 });
   const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage) => {
-    const blade = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), material);
-    blade.scale.set(width / 2, length / 2, width / 5);
+    const blade = new THREE.Mesh(leafGeometry, material);
+    blade.scale.set(width / 2, length, width / 5);
     blade.position.set(x, y, z);
     blade.rotation.set(-Math.sin(angle) * lean, angle, Math.cos(angle) * lean);
     plant.add(blade);
