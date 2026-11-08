@@ -121,6 +121,35 @@ function createSurfaceNoiseTexture() {
   return texture;
 }
 
+function createWoodGrainTexture() {
+  const size = 128;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      let noise = Math.imul(x + 1, 374761393) + Math.imul(y + 1, 668265263);
+      noise = Math.imul(noise ^ (noise >>> 13), 1274126177);
+      noise = (noise ^ (noise >>> 16)) >>> 0;
+      const grain = Math.sin(x * 0.92 + Math.sin(y * 0.055) * 1.4) * 13;
+      const tone = THREE.MathUtils.clamp(128 + grain + (noise % 11) - 5, 0, 255);
+      const index = (y * size + x) * 4;
+      data[index] = tone;
+      data[index + 1] = tone;
+      data[index + 2] = tone;
+      data[index + 3] = 255;
+    }
+  }
+
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2, 4);
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const cameraViewRef = useRef<CameraViewState | null>(null);
@@ -147,6 +176,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
     const contactShadowTexture = createContactShadowTexture();
     const substrateTexture = createSubstrateTexture();
     const surfaceNoiseTexture = createSurfaceNoiseTexture();
+    const woodGrainTexture = createWoodGrainTexture();
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
     const previousView = cameraViewRef.current?.viewMode === viewMode ? cameraViewRef.current : null;
     if (viewMode === "plan") {
@@ -299,7 +329,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       } else if (item.kind === "Branche") {
         const branch = new THREE.Group();
         const branchProfile = otherDecorationGeometryProfiles.branch[variant === "Branche droite" ? "straight" : "forked"];
-        const wood = new THREE.MeshStandardMaterial({ color: variant === "Branche droite" ? 0x805f42 : 0x705238, roughness: 0.94 });
+        const wood = new THREE.MeshStandardMaterial({ color: variant === "Branche droite" ? 0x805f42 : 0x705238, roughness: 0.94, bumpMap: woodGrainTexture, bumpScale: 0.016 });
         const addSegment = (start: THREE.Vector3, end: THREE.Vector3, radius: number) => {
           const direction = new THREE.Vector3().subVectors(end, start);
           const segment = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.72, radius, direction.length(), 8), wood);
@@ -316,7 +346,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       } else if (item.kind === "Plateforme") {
         const platform = new THREE.Group();
         const platformProfile = otherDecorationGeometryProfiles.platform;
-        const material = new THREE.MeshStandardMaterial({ color: variant === "Plateau en liège" ? 0x9a7855 : 0x806344, roughness: 0.92 });
+        const material = new THREE.MeshStandardMaterial({ color: variant === "Plateau en liège" ? 0x9a7855 : 0x806344, roughness: 0.92, bumpMap: woodGrainTexture, bumpScale: 0.012 });
         const slab = new THREE.Mesh(new THREE.BoxGeometry(platformProfile.slab.width, platformProfile.slab.height, platformProfile.slab.depth), material);
         slab.position.y = platformProfile.slab.y;
         platform.add(slab);
@@ -704,6 +734,7 @@ export function TerrariumScene({ shape, dimensions, biotope, decorations, viewMo
       contactShadowTexture?.dispose();
       substrateTexture.dispose();
       surfaceNoiseTexture.dispose();
+      woodGrainTexture.dispose();
     };
   }, [shape, dimensions, biotope, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
 
