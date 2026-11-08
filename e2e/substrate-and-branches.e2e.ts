@@ -19,6 +19,23 @@ test("substrate choices follow the biotope and appear in the report", async ({ p
   await expect(report.locator(".report-facts div").filter({ hasText: "Substrat" })).toContainText("Écorce de pin");
 });
 
+test("substrate guidance cites the species reference and flags risky choices", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Espèce de reptile ou amphibien").selectOption({ label: "Correlophus ciliatus · Gecko à crête" });
+  await page.locator(".biotope-option").filter({ hasText: "Tropical" }).click();
+  const guidance = page.getByRole("status", { name: "Repère substrat" });
+
+  await expect(guidance).toContainText("Repère favorable");
+  await expect(guidance).toContainText("60 % terreau organique");
+  await page.locator(".substrate-option").filter({ hasText: "Écorce de pin" }).click();
+  await expect(guidance).toContainText("À éviter selon la référence");
+  await expect(guidance).toContainText("cèdre");
+  await expect(page.getByRole("link", { name: /Substrate Options/ })).toBeVisible();
+
+  await page.locator(".substrate-option").filter({ hasText: "Mousse sphaigne" }).click();
+  await expect(guidance).toContainText("non documenté");
+});
+
 test("every branch pattern can be chosen for a branch", async ({ page }) => {
   await page.goto("/");
   const branch = page.locator(".decor-item").filter({ hasText: "Branche · Branche fourchue" });

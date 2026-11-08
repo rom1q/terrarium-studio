@@ -34,6 +34,7 @@ import {
   getHabitatZoneGuidance,
   getLifeStageLabel,
   getSpeciesStageProfile,
+  getSubstrateGuidance,
   getEquipmentZoneSources,
   measureDecorationPlacement,
   positionDecorationAtCm,
@@ -83,6 +84,14 @@ import {
 } from "../services/projectRepository";
 
 type SaveStatus = "idle" | "pending" | "saved" | "error";
+
+const substrateStatusLabels = {
+  recommended: "Repère favorable",
+  acceptable: "Possible avec précautions",
+  avoid: "À éviter selon la référence",
+  unknown: "À vérifier · non documenté",
+} as const;
+const substrateStatusClass = { recommended: "compatible", acceptable: "unknown", avoid: "incompatible", unknown: "unknown" } as const;
 
 const habitatZoneLabels: Record<HabitatZoneKey, string> = {
   hot: "Zone chaude",
@@ -216,6 +225,7 @@ function App() {
   const selectedSpeciesSources = [
     ...(selectedSpecies.source ? [selectedSpecies.source] : []),
     ...selectedStageProfile.sources,
+    ...(selectedSpecies.substrateSource ? [selectedSpecies.substrateSource] : []),
   ].filter((source, index, sources) => sources.findIndex((candidate) => candidate.url === source.url) === index);
   const habitatZoneGuidance = getHabitatZoneGuidance(selectedStageProfile);
   const [showHabitatZones, setShowHabitatZones] = useState(false);
@@ -663,6 +673,7 @@ function App() {
   };
 
   const selectedBiotopeGuidance = getBiotopeGuidance(selectedSpecies, biotope);
+  const substrateGuidance = getSubstrateGuidance(selectedSpecies, substrate);
   const biotopeGuidanceLabel = selectedBiotopeGuidance.status === "compatible"
     ? "Repère compatible"
     : selectedBiotopeGuidance.status === "incompatible"
@@ -825,12 +836,16 @@ function App() {
             <div className="substrate-picker">
               <p className="field-label">SUBSTRAT</p>
               <div className="substrate-options" role="group" aria-label="Substrat">
-                {substratesByBiotope[biotope].map((option) => <button key={option} type="button" aria-pressed={substrate === option} title={substrateCatalog[option].description} className={`substrate-option ${substrate === option ? "selected" : ""}`} onClick={() => setSubstrate(option)}>
+                {substratesByBiotope[biotope].map((option) => <button key={option} type="button" aria-pressed={substrate === option} title={substrateCatalog[option].description} className={`substrate-option ${substrate === option ? "selected" : ""} ${getSubstrateGuidance(selectedSpecies, option).status === "avoid" ? "avoid" : ""}`} onClick={() => setSubstrate(option)}>
                   <i className="substrate-swatch" style={{ background: `#${substrateCatalog[option].color.toString(16).padStart(6, "0")}` }} />
                   <span>{option}</span>
                 </button>)}
               </div>
               <p className="species-note"><CircleHelp size={13} /> {substrateCatalog[substrate].description} Drainage {substrateCatalog[substrate].drainage.toLowerCase()} · humidité {substrateCatalog[substrate].moisture.toLowerCase()}.</p>
+              <div className={`biotope-guidance ${substrateStatusClass[substrateGuidance.status]}`} role="status" aria-live="polite" aria-label="Repère substrat">
+                <span className="biotope-guidance-icon" aria-hidden="true">{substrateGuidance.status === "recommended" ? <Check size={14} /> : substrateGuidance.status === "avoid" ? <AlertTriangle size={14} /> : <CircleHelp size={14} />}</span>
+                <div><strong>{substrateStatusLabels[substrateGuidance.status]}</strong><p>{substrateGuidance.detail}</p></div>
+              </div>
             </div>
           </section>
 
@@ -985,7 +1000,7 @@ function App() {
             <dl className="report-facts">
               <div><dt>Dimensions intérieures</dt><dd>{dimensions.width} × {dimensions.depth} × {dimensions.height} cm</dd></div>
               <div><dt>Biotope et format</dt><dd>{biotope} · {shape.toLowerCase()}</dd></div>
-              <div><dt>Substrat</dt><dd>{substrate}</dd></div>
+              <div><dt>Substrat</dt><dd>{substrate} · {substrateStatusLabels[substrateGuidance.status].toLowerCase()}</dd></div>
               <div><dt>Stade de vie</dt><dd>{getLifeStageLabel(lifeStage)}</dd></div>
               <div><dt>Volume estimé</dt><dd>{(dimensions.width * dimensions.depth * dimensions.height / 1000).toFixed(0)} L</dd></div>
               <div><dt>Statut du bilan</dt><dd>{overallStatus}</dd></div>

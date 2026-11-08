@@ -9,6 +9,8 @@ export const lifeStageLabels: Record<LifeStage, string> = { hatchling: "Nouveau-
 export const getLifeStageLabel = (lifeStage: LifeStage): string => lifeStageLabels[lifeStage];
 export type BiotopeCompatibilityStatus = "compatible" | "incompatible" | "unknown";
 export type BiotopeGuidance = { status: BiotopeCompatibilityStatus; detail: string };
+export type SubstrateStatus = "recommended" | "acceptable" | "avoid" | "unknown";
+export type SubstrateGuidance = { status: Exclude<SubstrateStatus, "unknown">; detail: string };
 export const decorationVariants = {
   Plante: ["Feuillage dense", "Fougère", "Rosette"],
   Roche: ["Roche anguleuse", "Galet", "Stratifiée"],
@@ -79,6 +81,8 @@ export type SpeciesProfile = {
   referenceRanges: ReferenceRanges | null;
   hidesAtBothEnds: boolean | null;
   biotopeGuidance?: Partial<Record<Biotope, BiotopeGuidance>>;
+  substrateGuidance?: Partial<Record<Substrate, SubstrateGuidance>>;
+  substrateSource?: SpeciesSource;
 };
 export type ResolvedSpeciesStageProfile = {
   minimumDimensions: { width: number; depth: number; height: number } | null;
@@ -141,6 +145,10 @@ export function getSpeciesStageProfile(species: Pick<SpeciesProfile, "minimumDim
 
 export function getBiotopeGuidance(species: Pick<SpeciesProfile, "biotopeGuidance">, biotope: Biotope): BiotopeGuidance {
   return species.biotopeGuidance?.[biotope] ?? { status: "unknown", detail: "Compatibilité non documentée par une source vérifiée." };
+}
+
+export function getSubstrateGuidance(species: Pick<SpeciesProfile, "substrateGuidance">, substrate: Substrate): { status: SubstrateStatus; detail: string } {
+  return species.substrateGuidance?.[substrate] ?? { status: "unknown", detail: "Compatibilité de ce substrat non documentée par une source vérifiée." };
 }
 
 export function getHabitatZoneGuidance(species: Pick<SpeciesProfile, "referenceRanges" | "hidesAtBothEnds">): HabitatZoneGuidance[] {

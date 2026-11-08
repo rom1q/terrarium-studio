@@ -1,6 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { speciesCatalog } from "./speciesCatalog";
-import { getSpeciesStageProfile } from "../domain/projectLogic";
+import { getSpeciesStageProfile, getSubstrateGuidance } from "../domain/projectLogic";
+import { isKnownSubstrate } from "../domain/substrates";
+
+describe("sourced substrate guidance", () => {
+  it("only describes known substrates and always has a verified source behind it", () => {
+    const documented = speciesCatalog.filter((species) => species.substrateGuidance);
+
+    expect(documented.length).toBeGreaterThanOrEqual(5);
+    for (const species of documented) {
+      expect(species.source || species.substrateSource, species.label).toBeTruthy();
+      for (const [substrate, guidance] of Object.entries(species.substrateGuidance ?? {})) {
+        expect(isKnownSubstrate(substrate), `${species.label} ${substrate}`).toBe(true);
+        expect(guidance?.detail.length, `${species.label} ${substrate}`).toBeGreaterThan(30);
+      }
+    }
+  });
+
+  it("flags documented risks and leaves undocumented substrates unknown", () => {
+    const bySpecies = (name: string) => {
+      const species = speciesCatalog.find((item) => item.scientificName === name);
+      if (!species) throw new Error(`${name} missing`);
+      return species;
+    };
+
+    expect(getSubstrateGuidance(bySpecies("Pantherophis guttatus"), "Sable fin").status).toBe("avoid");
+    expect(getSubstrateGuidance(bySpecies("Python regius"), "Terreau tropical").status).toBe("recommended");
+    expect(getSubstrateGuidance(bySpecies("Correlophus ciliatus"), "Écorce de pin").status).toBe("avoid");
+    expect(getSubstrateGuidance(bySpecies("Eublepharis macularius"), "Mélange sable-argile").status).toBe("recommended");
+    expect(getSubstrateGuidance(bySpecies("Dendrobates tinctorius"), "Terreau humide").status).toBe("unknown");
+    expect(bySpecies("Dendrobates tinctorius").substrateGuidance).toBeUndefined();
+  });
+});
 
 describe("sourced animal catalog", () => {
   it("includes RSPCA care references for corn snakes and royal pythons", () => {
