@@ -8,7 +8,7 @@ import { getDecorationGeometryProfile } from "./decorationGeometry";
 import type { Decoration } from "./projectLogic";
 
 function expectWithinProfile(model: THREE.Object3D, profile: ReturnType<typeof getDecorationGeometryProfile>, label: string) {
-  const actual = new THREE.Box3().setFromObject(model);
+  const actual = new THREE.Box3().setFromObject(model, true);
   const { bounds } = profile;
   const tolerance = 0.002;
 

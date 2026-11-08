@@ -44,10 +44,35 @@ describe("species-specific plant models", () => {
       model.traverse((object) => {
         if (object instanceof THREE.Mesh && object.geometry.type === "TubeGeometry") tubes += 1;
       });
-      const box = new THREE.Box3().setFromObject(model);
+      const box = new THREE.Box3().setFromObject(model, true);
       expect(box.min.toArray().concat(box.max.toArray()).every(Number.isFinite)).toBe(true);
       expect(box.getSize(new THREE.Vector3()).y).toBeGreaterThan(0.2);
       expect(tubes).toBe(0);
+    }
+  });
+
+  it("grounds each plant at its root rather than at a drooping leaf tip", () => {
+    for (const profile of plantCatalog.filter((entry) => entry.visual.silhouette !== "ground-mat")) {
+      const model = createPlantModel(profile.visual, profile.visualVariant, 0x65804b);
+      model.updateMatrixWorld(true);
+      const points: THREE.Vector3[] = [];
+      model.traverse((object) => {
+        if (object instanceof THREE.InstancedMesh) {
+          const matrix = new THREE.Matrix4();
+          for (let index = 0; index < object.count; index += 1) {
+            object.getMatrixAt(index, matrix);
+            points.push(new THREE.Vector3().setFromMatrixPosition(matrix.premultiply(object.matrixWorld)));
+          }
+        } else if (object instanceof THREE.Mesh) {
+          const position = object.geometry.getAttribute("position");
+          for (let index = 0; index < position.count; index += 1) points.push(new THREE.Vector3().fromBufferAttribute(position, index).applyMatrix4(object.matrixWorld));
+        }
+      });
+      const box = new THREE.Box3().setFromObject(model, true);
+      const halfSpan = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
+      const rootLowest = Math.min(...points.filter((point) => Math.hypot(point.x, point.z) < halfSpan * 0.45).map((point) => point.y));
+
+      expect(rootLowest - box.min.y, profile.id).toBeLessThan((box.max.y - box.min.y) * 0.03);
     }
   });
 

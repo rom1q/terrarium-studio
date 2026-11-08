@@ -210,6 +210,7 @@ export function createPlantModel(
   const leafVeinMaterial = new THREE.LineBasicMaterial({ color: new THREE.Color(plantColor).multiplyScalar(0.55), transparent: true, opacity: 0.5 });
   const leafInstanceBatches = new Map<THREE.MeshPhysicalMaterial, THREE.Matrix4[]>();
   const archedLeafCache = new Map<string, ReturnType<typeof createArchedLeafGeometry>>();
+  const groundY = 0.04;
   const stemMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(plantColor).lerp(new THREE.Color(0x6b5a34), 0.4), roughness: 0.82 });
   const veinMaterial = new THREE.MeshStandardMaterial({ color: 0xa45559, roughness: 0.76 });
   // The shared leaf geometry is centred on its origin, so the instance sits half a length along the leaf.
@@ -228,13 +229,26 @@ export function createPlantModel(
   };
   // pitch is measured from vertical, so 0 stands the leaf up and 1.57 lays it flat.
   const addArchedLeaf = (base: THREE.Vector3, angle: number, pitch: number, options: ArchedLeafOptions, material: THREE.MeshPhysicalMaterial, midrib: "line" | "red" | "none" = "line") => {
-    const cacheKey = JSON.stringify(options);
-    const shape = archedLeafCache.get(cacheKey) ?? createArchedLeafGeometry(options);
-    archedLeafCache.set(cacheKey, shape);
-    const leaf = new THREE.Mesh(shape.geometry, material);
     const across = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
     const along = new THREE.Vector3(Math.cos(angle) * Math.sin(pitch), Math.cos(pitch), Math.sin(angle) * Math.sin(pitch));
-    leaf.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(across, along, new THREE.Vector3().crossVectors(across, along)));
+    const orientation = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(across, along, new THREE.Vector3().crossVectors(across, along)));
+    const getShape = (leafOptions: ArchedLeafOptions) => {
+      const cacheKey = JSON.stringify(leafOptions);
+      const cached = archedLeafCache.get(cacheKey) ?? createArchedLeafGeometry(leafOptions);
+      archedLeafCache.set(cacheKey, cached);
+      return cached;
+    };
+    // Straighten the arch until the tip stays above the ground, otherwise it would lift the whole plant.
+    let fitted = options;
+    let shape = getShape(fitted);
+    for (let attempt = 0; attempt < 10 && fitted.bend > 0.05; attempt += 1) {
+      const lowest = Math.min(...shape.centerline.map((point) => base.y + point.clone().applyQuaternion(orientation).y));
+      if (lowest >= groundY) break;
+      fitted = { ...fitted, bend: fitted.bend * 0.8 };
+      shape = getShape(fitted);
+    }
+    const leaf = new THREE.Mesh(shape.geometry, material);
+    leaf.quaternion.copy(orientation);
     leaf.position.copy(base);
     if (midrib !== "none") {
       const points = shape.centerline.map((point) => point.clone().add(new THREE.Vector3(0, 0, 0.004)));
@@ -257,10 +271,15 @@ export function createPlantModel(
     const outward = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
     const side = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
     const steps = 16;
-    const points = [base.clone()];
-    for (let step = 1; step <= steps; step += 1) {
-      const pitch = THREE.MathUtils.lerp(startPitch, endPitch, Math.pow((step - 0.5) / steps, 1.2));
-      points.push(points[step - 1].clone().addScaledVector(outward, Math.sin(pitch) * length / steps).add(new THREE.Vector3(0, Math.cos(pitch) * length / steps, 0)));
+    // Lower the frond's end pitch until the rachis and its hanging leaflets clear the ground.
+    let points: THREE.Vector3[] = [];
+    for (let end = endPitch; ; end = Math.max(startPitch, end - 0.15)) {
+      points = [base.clone()];
+      for (let step = 1; step <= steps; step += 1) {
+        const pitch = THREE.MathUtils.lerp(startPitch, end, Math.pow((step - 0.5) / steps, 1.2));
+        points.push(points[step - 1].clone().addScaledVector(outward, Math.sin(pitch) * length / steps).add(new THREE.Vector3(0, Math.cos(pitch) * length / steps, 0)));
+      }
+      if (Math.min(...points.map((point) => point.y)) >= groundY + leafletSize * 0.35 || end <= startPitch) break;
     }
     const curve = new THREE.CatmullRomCurve3(points);
     plant.add(new THREE.Mesh(new THREE.TubeGeometry(curve, steps, radius, 5, false), stemMaterial));
@@ -288,7 +307,7 @@ export function createPlantModel(
         ? { length: 0.62, width: 0.1, peak: 0.3, pitch: 0.38, bend: 0.35, cup: 0.5 }
         : isAloe
           ? { length: 0.82, width: 0.2, peak: 0.22, pitch: 0.8, bend: 0.85, cup: 0.55 }
-          : { length: 0.62, width: 0.2, peak: 0.5, pitch: 1.05, bend: 1, cup: 0.35 };
+          : { length: 0.62, width: 0.2, peak: 0.5, pitch: 0.8, bend: 0.9, cup: 0.35 };
       const tiers = [{ size: 1, upright: 1 }, { size: 0.8, upright: 0.7 }, { size: 0.58, upright: 0.4 }];
       const leafTotal = Math.round(count * 1.8);
       for (let index = 0; index < leafTotal; index += 1) {
@@ -296,7 +315,7 @@ export function createPlantModel(
         const variation = 0.9 + hashCell(index, 1, 7) * 0.2;
         const angle = index * 2.399;
         addArchedLeaf(
-          new THREE.Vector3(Math.cos(angle) * 0.03, 0.1 + (index % 3) * 0.03, Math.sin(angle) * 0.03),
+          new THREE.Vector3(Math.cos(angle) * 0.03, groundY + (index % 3) * 0.02, Math.sin(angle) * 0.03),
           angle,
           style.pitch * tier.upright + (hashCell(index, 2, 7) - 0.5) * 0.16,
           { ...style, length: style.length * tier.size * variation, width: style.width * tier.size, bend: style.bend * tier.upright },
@@ -312,7 +331,7 @@ export function createPlantModel(
         const tier = tiers[index % 3];
         const angle = index * 2.399;
         addFrond({
-          base: new THREE.Vector3(Math.cos(angle) * 0.02, 0.08, Math.sin(angle) * 0.02),
+          base: new THREE.Vector3(Math.cos(angle) * 0.02, groundY, Math.sin(angle) * 0.02),
           angle,
           length: 0.9 * tier.size * (0.92 + hashCell(index, 4, 7) * 0.16),
           startPitch: tier.start,
@@ -332,7 +351,7 @@ export function createPlantModel(
         const tier = tiers[index % 3];
         const angle = index * 2.399;
         addArchedLeaf(
-          new THREE.Vector3(Math.cos(angle) * 0.02, 0.08, Math.sin(angle) * 0.02),
+          new THREE.Vector3(Math.cos(angle) * 0.02, groundY, Math.sin(angle) * 0.02),
           angle,
           0.7 * tier.upright + (hashCell(index, 5, 7) - 0.5) * 0.14,
           { ...style, length: style.length * tier.size * (0.92 + hashCell(index, 6, 7) * 0.16), width: style.width * tier.size, bend: style.bend * tier.upright },
@@ -353,7 +372,7 @@ export function createPlantModel(
         const tier = tiers[index % 3];
         const angle = index * 2.399;
         addArchedLeaf(
-          new THREE.Vector3(Math.cos(angle) * 0.02, 0.06, Math.sin(angle) * 0.02),
+          new THREE.Vector3(Math.cos(angle) * 0.02, groundY, Math.sin(angle) * 0.02),
           angle,
           tier.pitch + (hashCell(index, 8, 7) - 0.5) * 0.2,
           { ...style, length: style.length * tier.size * (0.9 + hashCell(index, 9, 7) * 0.2), width: style.width * (0.9 + tier.size * 0.1), bend: tier.bend },
@@ -439,7 +458,7 @@ export function createPlantModel(
   });
 
   const geometryBounds = plantGeometryProfiles[profile.silhouette].bounds;
-  const actualBounds = new THREE.Box3().setFromObject(plant);
+  const actualBounds = new THREE.Box3().setFromObject(plant, true);
   const center = actualBounds.getCenter(new THREE.Vector3());
   const size = actualBounds.getSize(new THREE.Vector3());
   const centeringTransform = new THREE.Matrix4().makeTranslation(-center.x, -actualBounds.min.y, -center.z);
