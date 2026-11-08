@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -129,6 +129,38 @@ function createWoodGrainTexture() {
   return texture;
 }
 
+// The stage (renderer, camera, controls, loop) outlives content changes; only the content group is rebuilt.
+type SceneStage = {
+  viewMode: "3d" | "plan";
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  renderer: THREE.WebGLRenderer;
+  controls: OrbitControls;
+  transformControls: TransformControls;
+  textures: { contactShadow: THREE.Texture; surfaceNoise: THREE.Texture; woodGrain: THREE.Texture };
+  modelCache: Map<string, THREE.Object3D>;
+  textureCache: Map<string, THREE.Texture>;
+  rippleTexture?: THREE.Texture;
+  animation: { plants: { model: THREE.Group; phase: number; baseRotation: THREE.Euler }[]; waterRipples?: THREE.Texture };
+};
+
+// Cached decoration models are skipped unless `includeCached` is set, so they survive content rebuilds.
+function disposeObjectTree(root: THREE.Object3D, includeCached = false) {
+  const visit = (object: THREE.Object3D) => {
+    if (!includeCached && object.userData.cachedModel) return;
+    if (object instanceof THREE.Sprite) {
+      object.material.dispose();
+    } else if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+      object.geometry.dispose();
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => material.dispose());
+      if (object instanceof THREE.InstancedMesh) object.dispose();
+    }
+    object.children.forEach(visit);
+  };
+  visit(root);
+}
+
 export function TerrariumScene({ shape, dimensions, biotope, substrate, decorations, viewMode, selectedDecorationId, transformMode, selectedSpecies, habitatZoneGuidance, showHabitatZones, activeLayoutWarning, previewedLayoutSuggestion, onDecorationSelectionChange, onDecorationsChange }: TerrariumSceneProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const cameraViewRef = useRef<CameraViewState | null>(null);
@@ -146,6 +178,8 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
   activeLayoutWarningRef.current = activeLayoutWarning;
   previewedLayoutSuggestionRef.current = previewedLayoutSuggestion;
 
+  const [stage, setStage] = useState<SceneStage | null>(null);
+
   useEffect(() => {
     const host = viewportRef.current;
     if (!host) return;
@@ -153,8 +187,6 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#e9ede4");
     const contactShadowTexture = createContactShadowTexture();
-    const substrateProfile = substrateCatalog[substrate];
-    const substrateTexture = createSubstrateTexture(substrateProfile.texture);
     const surfaceNoiseTexture = createSurfaceNoiseTexture();
     const woodGrainTexture = createWoodGrainTexture();
     const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
@@ -209,8 +241,88 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
     controls.maxPolarAngle = Math.PI * 0.48;
     controls.enableRotate = viewMode !== "plan";
     const transformControls = new TransformControls(camera, renderer.domElement);
-    transformControls.setMode(transformMode);
     transformControls.rotationSnap = Math.PI / 12;
+    scene.add(transformControls.getHelper());
+
+    const resize = () => {
+      const bounds = host.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      camera.aspect = bounds.width / bounds.height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(bounds.width, bounds.height, false);
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(host);
+    resize();
+
+    const animation: SceneStage["animation"] = { plants: [] };
+    let frame = 0;
+    const animationStartedAt = performance.now();
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const animate = () => {
+      frame = requestAnimationFrame(animate);
+      controls.update();
+      const timeSeconds = (performance.now() - animationStartedAt) / 1000;
+      if (animation.waterRipples && viewMode === "3d" && !prefersReducedMotion) animation.waterRipples.offset.set(timeSeconds * 0.006, timeSeconds * 0.011);
+      animation.plants.forEach(({ model, phase, baseRotation }) => {
+        const sway = viewMode === "3d" && !prefersReducedMotion ? getPlantSway(timeSeconds, phase) : { rotationX: 0, rotationZ: 0 };
+        model.rotation.set(baseRotation.x + sway.rotationX, baseRotation.y, baseRotation.z + sway.rotationZ);
+      });
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const created: SceneStage = {
+      viewMode,
+      scene,
+      camera,
+      renderer,
+      controls,
+      transformControls,
+      textures: { contactShadow: contactShadowTexture, surfaceNoise: surfaceNoiseTexture, woodGrain: woodGrainTexture },
+      modelCache: new Map(),
+      textureCache: new Map(),
+      animation,
+    };
+    setStage(created);
+
+    return () => {
+      cameraViewRef.current = {
+        viewMode,
+        position: [camera.position.x, camera.position.y, camera.position.z],
+        up: [camera.up.x, camera.up.y, camera.up.z],
+        target: [controls.target.x, controls.target.y, controls.target.z],
+      };
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      controls.dispose();
+      transformControls.dispose();
+      scene.remove(transformControls.getHelper());
+      created.modelCache.forEach((model) => disposeObjectTree(model, true));
+      created.modelCache.clear();
+      created.textureCache.forEach((texture) => texture.dispose());
+      created.rippleTexture?.dispose();
+      renderer.dispose();
+      host.replaceChildren();
+      contactShadowTexture.dispose();
+      surfaceNoiseTexture.dispose();
+      woodGrainTexture.dispose();
+    };
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!stage) return;
+    const { scene: rootScene, camera, renderer, controls, transformControls, textures } = stage;
+    const viewMode = stage.viewMode;
+    const contactShadowTexture = textures.contactShadow;
+    const surfaceNoiseTexture = textures.surfaceNoise;
+    const woodGrainTexture = textures.woodGrain;
+    const substrateProfile = substrateCatalog[substrate];
+    const substrateTexture = stage.textureCache.get(substrateProfile.texture) ?? createSubstrateTexture(substrateProfile.texture);
+    stage.textureCache.set(substrateProfile.texture, substrateTexture);
+    const scene = new THREE.Group();
+    rootScene.add(scene);
+    transformControls.setMode(transformMode);
     transformControls.showX = transformMode !== "rotate";
     transformControls.showZ = transformMode !== "rotate";
 
@@ -256,7 +368,8 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
       };
       addPoolLayer(poolWidth + 0.1, poolDepth + 0.1, 0x2f261d, 0.4, surfaceY + 0.001, 1);
       addPoolLayer(poolWidth, poolDepth, 0x1f2f2a, 0.6, surfaceY + 0.002, 2);
-      waterRipples = createSubstrateTexture("fine-sand");
+      stage.rippleTexture ??= createSubstrateTexture("fine-sand");
+      waterRipples = stage.rippleTexture;
       waterRipples.repeat.set(3, 6);
       const water = new THREE.Mesh(
         new THREE.BoxGeometry(poolWidth, 0.045, poolDepth),
@@ -301,6 +414,7 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
     const decorationObjects: THREE.Object3D[] = [];
     const decorationObjectsById = new Map<number, THREE.Object3D>();
     const animatedPlants: { model: THREE.Group; phase: number; baseRotation: THREE.Euler }[] = [];
+    const usedModelKeys = new Set<string>();
     decorations.forEach((item) => {
       const x = item.position.x * widthHalf;
       const z = item.position.z * depthHalf;
@@ -309,8 +423,19 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
       const plantProfile = item.kind === "Plante" ? getPlantProfile(item.plantSpeciesId) : undefined;
       const variant = item.variant ?? plantProfile?.visualVariant ?? getDefaultDecorationVariant(item.kind, biotope);
       const geometryProfile = getDecorationGeometryProfile(item, biotope);
+      const modelKey = `${item.id}:${item.kind}:${variant}:${item.plantSpeciesId ?? ""}:${biotope}`;
+      usedModelKeys.add(modelKey);
+      const cachedModel = <T extends THREE.Object3D>(create: () => T): T => {
+        let model = stage.modelCache.get(modelKey) as T | undefined;
+        if (!model) {
+          model = create();
+          model.userData.cachedModel = true;
+          stage.modelCache.set(modelKey, model);
+        }
+        return model;
+      };
       const addDecorationObject = (model: THREE.Object3D) => {
-        model.position.y -= geometryProfile.bounds.minY;
+        model.position.y = -geometryProfile.bounds.minY;
         const anchor = new THREE.Group();
         anchor.userData.decorationId = item.id;
         anchor.add(model);
@@ -322,17 +447,18 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
         decorationObjectsById.set(item.id, anchor);
       };
       if (item.kind === "Plante") {
-        const plant = createPlantModel(plantProfile?.visual, variant, colors.plant);
-        animatedPlants.push({ model: plant, phase: item.id * 2.399, baseRotation: plant.rotation.clone() });
+        const plant = cachedModel(() => createPlantModel(plantProfile?.visual, variant, colors.plant));
+        animatedPlants.push({ model: plant, phase: item.id * 2.399, baseRotation: new THREE.Euler() });
         addDecorationObject(plant);
       } else if (item.kind === "Cachette") {
-        const hide = createHideModel(variant as "Grotte" | "Tronc creux" | "Écorce creuse", surfaceNoiseTexture);
+        const hide = cachedModel(() => createHideModel(variant as "Grotte" | "Tronc creux" | "Écorce creuse", surfaceNoiseTexture));
         addDecorationObject(hide);
       } else if (item.kind === "Branche") {
-        addDecorationObject(createBranchModel(variant, woodGrainTexture));
+        addDecorationObject(cachedModel(() => createBranchModel(variant, woodGrainTexture)));
       } else if (item.kind === "Plateforme") {
-        addDecorationObject(createPlatformModel(variant, woodGrainTexture, surfaceNoiseTexture));
+        addDecorationObject(cachedModel(() => createPlatformModel(variant, woodGrainTexture, surfaceNoiseTexture)));
       } else if (item.kind === "Gamelle") {
+        const bowl = cachedModel(() => {
         const bowl = new THREE.Group();
         const bowlProfile = otherDecorationGeometryProfiles.bowl;
         const ceramic = new THREE.MeshPhysicalMaterial({ color: 0x7f8a76, roughness: 0.32, clearcoat: 0.6, clearcoatRoughness: 0.2, side: THREE.DoubleSide });
@@ -354,13 +480,15 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
           water.position.y = bowlProfile.water.y;
           bowl.add(water);
         }
+        return bowl;
+        });
         addDecorationObject(bowl);
       } else if (item.kind === "Lampe chauffante") {
-        addDecorationObject(createHeatLampModel(frameMaterial, contactShadowTexture));
+        addDecorationObject(cachedModel(() => createHeatLampModel(frameMaterial, contactShadowTexture)));
       } else if (item.kind === "Tube UVB") {
-        addDecorationObject(createUvbModel(frameMaterial, contactShadowTexture));
+        addDecorationObject(cachedModel(() => createUvbModel(frameMaterial, contactShadowTexture)));
       } else {
-        const rock = createRockModel(variant as "Roche anguleuse" | "Galet" | "Stratifiée", item.id, surfaceNoiseTexture);
+        const rock = cachedModel(() => createRockModel(variant as "Roche anguleuse" | "Galet" | "Stratifiée", item.id, surfaceNoiseTexture));
         addDecorationObject(rock);
       }
       if (item.kind !== "Lampe chauffante" && item.kind !== "Tube UVB") {
@@ -383,6 +511,11 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
         shadow.renderOrder = 1;
         scene.add(shadow);
       }
+    });
+    stage.modelCache.forEach((model, key) => {
+      if (usedModelKeys.has(key)) return;
+      disposeObjectTree(model, true);
+      stage.modelCache.delete(key);
     });
     decorationObjects.forEach((object) => object.traverse((part) => {
       if (part instanceof THREE.Mesh) {
@@ -446,7 +579,6 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
     }
 
     transformControls.detach();
-    scene.add(transformControls.getHelper());
     const selectedObject = selectedDecorationIdRef.current === null ? undefined : decorationObjectsById.get(selectedDecorationIdRef.current);
     if (viewMode === "3d" && selectedObject) transformControls.attach(selectedObject);
     const layoutWarning = activeLayoutWarningRef.current;
@@ -483,6 +615,7 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
       if (source && decoration) {
         const ghost = source.clone(true);
         ghost.traverse((object) => {
+          object.userData.cachedModel = false;
           if (!(object instanceof THREE.Mesh)) return;
           object.geometry = object.geometry.clone();
           const originalMaterials = Array.isArray(object.material) ? object.material : [object.material];
@@ -513,9 +646,10 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
         scene.add(previewOutline);
       }
     }
-    transformControls.addEventListener("dragging-changed", (event) => {
+    const onDraggingChanged = (event: { value?: unknown }) => {
       controls.enabled = !event.value;
-    });
+    };
+    transformControls.addEventListener("dragging-changed", onDraggingChanged);
     const saveTransformedDecoration = () => {
       const object = transformControls.object;
       if (!object || object.userData.decorationId == null) return;
@@ -635,69 +769,24 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointercancel", onPointerUp);
 
-    const resize = () => {
-      const bounds = host.getBoundingClientRect();
-      if (!bounds.width || !bounds.height) return;
-      camera.aspect = bounds.width / bounds.height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(bounds.width, bounds.height, false);
-    };
-    const observer = new ResizeObserver(resize);
-    observer.observe(host);
-    resize();
-
-    let frame = 0;
-    const animationStartedAt = performance.now();
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const animate = () => {
-      frame = requestAnimationFrame(animate);
-      controls.update();
-      const timeSeconds = (performance.now() - animationStartedAt) / 1000;
-      if (waterRipples && viewMode === "3d" && !prefersReducedMotion) waterRipples.offset.set(timeSeconds * 0.006, timeSeconds * 0.011);
-      animatedPlants.forEach(({ model, phase, baseRotation }) => {
-        const sway = viewMode === "3d" && !prefersReducedMotion ? getPlantSway(timeSeconds, phase) : { rotationX: 0, rotationZ: 0 };
-        model.rotation.set(baseRotation.x + sway.rotationX, baseRotation.y, baseRotation.z + sway.rotationZ);
-      });
-      renderer.render(scene, camera);
-    };
-    animate();
+    stage.animation.plants = animatedPlants;
+    stage.animation.waterRipples = waterRipples;
 
     return () => {
-      cameraViewRef.current = {
-        viewMode,
-        position: [camera.position.x, camera.position.y, camera.position.z],
-        up: [camera.up.x, camera.up.y, camera.up.z],
-        target: [controls.target.x, controls.target.y, controls.target.z],
-      };
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      controls.dispose();
-      transformControls.dispose();
-      scene.remove(transformControls.getHelper());
+      stage.animation.plants = [];
+      stage.animation.waterRipples = undefined;
+      controls.enabled = true;
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointercancel", onPointerUp);
-      renderer.dispose();
-      host.replaceChildren();
-      scene.traverse((object) => {
-        if (object instanceof THREE.Sprite) {
-          object.material.dispose();
-          return;
-        }
-        if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
-          object.geometry.dispose();
-          const materials = Array.isArray(object.material) ? object.material : [object.material];
-          materials.forEach((material) => material.dispose());
-        }
-      });
-      contactShadowTexture?.dispose();
-      substrateTexture.dispose();
-      waterRipples?.dispose();
-      surfaceNoiseTexture.dispose();
-      woodGrainTexture.dispose();
+      transformControls.removeEventListener("dragging-changed", onDraggingChanged);
+      transformControls.removeEventListener("mouseUp", saveTransformedDecoration);
+      transformControls.detach();
+      rootScene.remove(scene);
+      disposeObjectTree(scene);
     };
-  }, [shape, dimensions, biotope, substrate, decorations, viewMode, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
+  }, [stage, shape, dimensions, biotope, substrate, decorations, transformMode, selectedSpecies, habitatZoneGuidanceKey, showHabitatZones, activeLayoutWarningKey, previewedLayoutSuggestionKey]);
 
   return <div className="viewport" ref={viewportRef} data-mode={viewMode} />;
 }
