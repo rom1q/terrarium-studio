@@ -9,6 +9,7 @@ import { createPlantModel, getPlantSway } from "./plantModels";
 import { createRockModel } from "./decorationModels";
 import { createHideModel } from "./hideModels";
 import { createBranchModel } from "./branchModels";
+import { createHeatLampModel, createPlatformModel, createUvbModel } from "./equipmentModels";
 import { createSubstrateScatter, createSubstrateTexture } from "./substrateTextures";
 import { substrateCatalog, type Substrate } from "../../domain/substrates";
 import { getTerrariumSceneDimensions, type LayoutSuggestion, type LayoutWarning } from "../../domain/layoutValidation";
@@ -330,24 +331,11 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
       } else if (item.kind === "Branche") {
         addDecorationObject(createBranchModel(variant, woodGrainTexture));
       } else if (item.kind === "Plateforme") {
-        const platform = new THREE.Group();
-        const platformProfile = otherDecorationGeometryProfiles.platform;
-        const material = new THREE.MeshStandardMaterial({ color: variant === "Plateau en liège" ? 0x9a7855 : 0x806344, roughness: 0.92, bumpMap: woodGrainTexture, bumpScale: 0.04 });
-        const slab = new THREE.Mesh(new THREE.BoxGeometry(platformProfile.slab.width, platformProfile.slab.height, platformProfile.slab.depth), material);
-        slab.position.y = platformProfile.slab.y;
-        platform.add(slab);
-        for (const supportX of platformProfile.support.x) {
-          for (const supportZ of platformProfile.support.z) {
-            const support = new THREE.Mesh(new THREE.BoxGeometry(platformProfile.support.width, platformProfile.support.height, platformProfile.support.depth), material);
-            support.position.set(supportX, platformProfile.support.y, supportZ);
-            platform.add(support);
-          }
-        }
-        addDecorationObject(platform);
+        addDecorationObject(createPlatformModel(variant, woodGrainTexture, surfaceNoiseTexture));
       } else if (item.kind === "Gamelle") {
         const bowl = new THREE.Group();
         const bowlProfile = otherDecorationGeometryProfiles.bowl;
-        const ceramic = new THREE.MeshStandardMaterial({ color: 0x8b8b79, roughness: 0.48 });
+        const ceramic = new THREE.MeshPhysicalMaterial({ color: 0x7f8a76, roughness: 0.32, clearcoat: 0.6, clearcoatRoughness: 0.2, side: THREE.DoubleSide });
         const body = new THREE.Mesh(new THREE.CylinderGeometry(bowlProfile.body.topRadius, bowlProfile.body.bottomRadius, bowlProfile.body.height, 20, 1, true), ceramic);
         body.position.y = bowlProfile.body.y;
         bowl.add(body);
@@ -361,45 +349,16 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
         if (variant === "Gamelle d’eau") {
           const water = new THREE.Mesh(
             new THREE.CylinderGeometry(bowlProfile.water.radius, bowlProfile.water.radius, bowlProfile.water.height, 20),
-            new THREE.MeshPhysicalMaterial({ color: colors.water, roughness: 0.2, metalness: 0.08 }),
+            new THREE.MeshPhysicalMaterial({ color: colors.water, transparent: true, opacity: 0.78, roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.05 }),
           );
           water.position.y = bowlProfile.water.y;
           bowl.add(water);
         }
         addDecorationObject(bowl);
       } else if (item.kind === "Lampe chauffante") {
-        const lamp = new THREE.Group();
-        const lampProfile = otherDecorationGeometryProfiles.heater;
-        const shade = new THREE.Mesh(
-          new THREE.CylinderGeometry(lampProfile.shade.topRadius, lampProfile.shade.bottomRadius, lampProfile.shade.height, 16, 1, true),
-          new THREE.MeshStandardMaterial({ color: 0x555d57, metalness: 0.35, roughness: 0.55, side: THREE.DoubleSide }),
-        );
-        shade.position.y = lampProfile.shade.y;
-        lamp.add(shade);
-        const bulb = new THREE.Mesh(
-          new THREE.SphereGeometry(lampProfile.bulb.radius, 12, 8),
-          new THREE.MeshStandardMaterial({ color: 0xe9a85d, emissive: 0xe58a3d, emissiveIntensity: 0.65, roughness: 0.35 }),
-        );
-        bulb.position.y = lampProfile.bulb.y;
-        lamp.add(bulb);
-        const cable = new THREE.Mesh(new THREE.CylinderGeometry(lampProfile.cable.radius, lampProfile.cable.radius, lampProfile.cable.height, 8), frameMaterial);
-        cable.position.y = lampProfile.cable.y;
-        lamp.add(cable);
-        addDecorationObject(lamp);
+        addDecorationObject(createHeatLampModel(frameMaterial, contactShadowTexture));
       } else if (item.kind === "Tube UVB") {
-        const tube = new THREE.Group();
-        const tubeProfile = otherDecorationGeometryProfiles.uvb;
-        const lightTube = new THREE.Mesh(
-          new THREE.CylinderGeometry(tubeProfile.tube.radius, tubeProfile.tube.radius, tubeProfile.tube.length, 10),
-          new THREE.MeshStandardMaterial({ color: 0xdde8cd, emissive: 0x87a9ad, emissiveIntensity: 0.4, roughness: 0.32 }),
-        );
-        lightTube.rotation.z = Math.PI / 2;
-        lightTube.position.y = tubeProfile.tube.y;
-        tube.add(lightTube);
-        const mount = new THREE.Mesh(new THREE.BoxGeometry(tubeProfile.mount.width, tubeProfile.mount.height, tubeProfile.mount.depth), frameMaterial);
-        mount.position.y = tubeProfile.mount.y;
-        tube.add(mount);
-        addDecorationObject(tube);
+        addDecorationObject(createUvbModel(frameMaterial, contactShadowTexture));
       } else {
         const rock = createRockModel(variant as "Roche anguleuse" | "Galet" | "Stratifiée", item.id, surfaceNoiseTexture);
         addDecorationObject(rock);
@@ -719,6 +678,10 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
       renderer.dispose();
       host.replaceChildren();
       scene.traverse((object) => {
+        if (object instanceof THREE.Sprite) {
+          object.material.dispose();
+          return;
+        }
         if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
           object.geometry.dispose();
           const materials = Array.isArray(object.material) ? object.material : [object.material];

@@ -363,11 +363,11 @@ export function createPlantModel(
     case "arching-straps":
     case "grass-clump": {
       const isGrass = profile.silhouette === "grass-clump";
-      const style = isGrass ? { length: 0.7, width: 0.055, peak: 0.22, cup: 0.3 } : { length: 0.85, width: 0.09, peak: 0.28, cup: 0.5 };
+      const style = isGrass ? { length: 0.7, width: 0.055, peak: 0.22, cup: 0.3 } : { length: 0.85, width: 0.13, peak: 0.28, cup: 0.5 };
       const tiers = isGrass
         ? [{ size: 1, pitch: 0.45, bend: 1.1 }, { size: 0.85, pitch: 0.3, bend: 0.9 }, { size: 0.65, pitch: 0.15, bend: 0.6 }]
         : [{ size: 1, pitch: 0.62, bend: 2.2 }, { size: 0.85, pitch: 0.42, bend: 1.7 }, { size: 0.7, pitch: 0.22, bend: 1.2 }];
-      const leafTotal = Math.round(count * (isGrass ? 2.6 : 2.2));
+      const leafTotal = Math.round(count * (isGrass ? 2.6 : 3.2));
       for (let index = 0; index < leafTotal; index += 1) {
         const tier = tiers[index % 3];
         const angle = index * 2.399;
@@ -384,17 +384,17 @@ export function createPlantModel(
     }
     case "broadleaf":
     case "prayer-leaves": {
-      const leafTotal = profile.silhouette === "prayer-leaves" ? count : Math.round(count * 0.8);
+      const leafTotal = profile.silhouette === "prayer-leaves" ? count : Math.round(count * (count < 12 ? 1.5 : 0.8));
       for (let index = 0; index < leafTotal; index += 1) {
         const angle = index * 2.399;
         const reach = 0.06 + hashCell(index, 12, 7) * 0.2;
-        const stemEnd = new THREE.Vector3(Math.cos(angle) * reach, 0.2 + hashCell(index, 13, 7) * 0.3, Math.sin(angle) * reach);
+        const stemEnd = new THREE.Vector3(Math.cos(angle) * reach, 0.14 + hashCell(index, 13, 7) * 0.24, Math.sin(angle) * reach);
         addStem(new THREE.Vector3(0, 0.04, 0), stemEnd, 0.009);
         addArchedLeaf(
           stemEnd.clone().add(new THREE.Vector3(0, 0.02, 0)),
           angle,
           1 + hashCell(index, 3, 7) * 0.45,
-          { length: 0.42 * (0.85 + hashCell(index, 14, 7) * 0.3), width: 0.3, peak: 0.42, bend: 0.7, cup: 0.22 },
+          { length: 0.5 * (0.85 + hashCell(index, 14, 7) * 0.3), width: 0.36, peak: 0.42, bend: 0.7, cup: 0.22 },
           index % 2 ? archedFoliageLight : archedFoliage,
           profile.silhouette === "prayer-leaves" ? "red" : "line",
         );
