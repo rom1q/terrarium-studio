@@ -106,15 +106,55 @@ function createRibbonBladeGeometry(curve: THREE.Curve<THREE.Vector3>, baseWidth:
   return geometry;
 }
 
-function createLeafVeinGeometry() {
-  const curve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0, -0.44, 0.08),
-    new THREE.Vector3(0, -0.22, 0.28),
-    new THREE.Vector3(0, 0, 0.36),
-    new THREE.Vector3(0, 0.22, 0.28),
-    new THREE.Vector3(0, 0.44, 0.08),
-  ]);
-  return new THREE.BufferGeometry().setFromPoints(curve.getPoints(8));
+type ArchedLeafOptions = { length: number; width: number; peak: number; bend: number; cup: number };
+
+// Leaf grows along +Y from its base and arches toward -Z; +Z is the upper face.
+function createArchedLeafGeometry({ length, width, peak, bend, cup }: ArchedLeafOptions) {
+  const widthSegments = 8;
+  const lengthSegments = 16;
+  const widthExponent = Math.log(0.5) / Math.log(peak);
+  const vertices: number[] = [];
+  const uvs: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const centerline: THREE.Vector3[] = [];
+  let y = 0;
+  let z = 0;
+
+  for (let lengthIndex = 0; lengthIndex <= lengthSegments; lengthIndex += 1) {
+    const along = lengthIndex / lengthSegments;
+    const angle = bend * Math.pow(along, 1.4);
+    if (lengthIndex > 0) {
+      y += Math.cos(angle) * length / lengthSegments;
+      z -= Math.sin(angle) * length / lengthSegments;
+    }
+    const halfWidth = width / 2 * (Math.pow(Math.sin(Math.PI * Math.pow(along, widthExponent)), 0.7) * 0.88 + 0.12 * (1 - along) * (1 - along));
+    const shade = 0.58 + 0.42 * Math.min(1, along * 2.2);
+    centerline.push(new THREE.Vector3(0, y, z));
+    for (let widthIndex = 0; widthIndex <= widthSegments; widthIndex += 1) {
+      const across = widthIndex / widthSegments * 2 - 1;
+      const lift = Math.pow(Math.abs(across), 1.5) * halfWidth * cup;
+      vertices.push(across * halfWidth, y + Math.sin(angle) * lift, z + Math.cos(angle) * lift);
+      uvs.push((across + 1) / 2, along);
+      colors.push(shade * (0.96 + 0.1 * along), shade, shade * (0.94 - 0.12 * along));
+    }
+  }
+
+  for (let lengthIndex = 0; lengthIndex < lengthSegments; lengthIndex += 1) {
+    for (let widthIndex = 0; widthIndex < widthSegments; widthIndex += 1) {
+      const lowerLeft = lengthIndex * (widthSegments + 1) + widthIndex;
+      const upperLeft = lowerLeft + widthSegments + 1;
+      indices.push(lowerLeft, lowerLeft + 1, upperLeft, lowerLeft + 1, upperLeft + 1, upperLeft);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return { geometry, centerline };
 }
 
 // The red channel doubles as the bump height, so veins are darker in red to read as grooves.
@@ -190,11 +230,12 @@ export function createPlantModel(
   const profile = visualProfile ?? fallbackProfiles[variant as keyof typeof fallbackProfiles] ?? fallbackProfiles["Feuillage dense"];
   const plant = new THREE.Group();
   const foliageHighlight = new THREE.Color(plantColor).lerp(new THREE.Color(0xc3ce85), 0.22);
-  const createFoliageMaterial = (color: THREE.ColorRepresentation, roughness: number, texture = getLeafDetailTexture("pinnate")) => new THREE.MeshPhysicalMaterial({
+  const createFoliageMaterial = (color: THREE.ColorRepresentation, roughness: number, texture = getLeafDetailTexture("pinnate"), vertexColors = false) => new THREE.MeshPhysicalMaterial({
     color,
     map: texture,
     bumpMap: texture,
     bumpScale: 0.008,
+    vertexColors,
     roughness,
     side: THREE.DoubleSide,
     sheen: 0.28,
@@ -206,29 +247,34 @@ export function createPlantModel(
   const parallelTexture = getLeafDetailTexture("parallel");
   const strapFoliage = createFoliageMaterial(plantColor, 0.66, parallelTexture);
   const strapFoliageLight = createFoliageMaterial(foliageHighlight, 0.7, parallelTexture);
+  const archedFoliage = createFoliageMaterial(plantColor, 0.62, undefined, true);
+  const archedFoliageLight = createFoliageMaterial(foliageHighlight, 0.66, undefined, true);
   const leafGeometry = createTaperedLeafGeometry();
-  const leafVeinGeometry = createLeafVeinGeometry();
-  const leafVeinMaterial = new THREE.LineBasicMaterial({ color: new THREE.Color(plantColor).multiplyScalar(0.68), transparent: true, opacity: 0.42 });
+  const leafVeinMaterial = new THREE.LineBasicMaterial({ color: new THREE.Color(plantColor).multiplyScalar(0.55), transparent: true, opacity: 0.5 });
   const leafInstanceBatches = new Map<THREE.MeshPhysicalMaterial, THREE.Matrix4[]>();
   const stemMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(plantColor).lerp(new THREE.Color(0x6b5a34), 0.4), roughness: 0.82 });
   const veinMaterial = new THREE.MeshStandardMaterial({ color: 0xa45559, roughness: 0.76 });
-  const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage, showVein = false, instanced = false, rotationX = 0): THREE.Mesh | null => {
+  const addBlade = (x: number, y: number, z: number, length: number, width: number, angle: number, lean: number, material = foliage, rotationX = 0) => {
     const position = new THREE.Vector3(x, y, z);
     const rotation = new THREE.Euler(-Math.sin(angle) * lean + rotationX, angle, Math.cos(angle) * lean);
     const scale = new THREE.Vector3(width / 2, length, width / 5);
-    if (instanced) {
-      const batch = leafInstanceBatches.get(material) ?? [];
-      batch.push(new THREE.Matrix4().compose(position, new THREE.Quaternion().setFromEuler(rotation), scale));
-      leafInstanceBatches.set(material, batch);
-      return null;
-    }
-    const blade = new THREE.Mesh(leafGeometry, material);
-    blade.scale.copy(scale);
-    blade.position.copy(position);
-    blade.rotation.copy(rotation);
-    if (showVein) blade.add(new THREE.Line(leafVeinGeometry, leafVeinMaterial));
-    plant.add(blade);
-    return blade;
+    const batch = leafInstanceBatches.get(material) ?? [];
+    batch.push(new THREE.Matrix4().compose(position, new THREE.Quaternion().setFromEuler(rotation), scale));
+    leafInstanceBatches.set(material, batch);
+  };
+  // pitch is measured from vertical, so 0 stands the leaf up and 1.57 lays it flat.
+  const addArchedLeaf = (base: THREE.Vector3, angle: number, pitch: number, options: ArchedLeafOptions, material: THREE.MeshPhysicalMaterial, redMidrib = false) => {
+    const { geometry, centerline } = createArchedLeafGeometry(options);
+    const leaf = new THREE.Mesh(geometry, material);
+    const across = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
+    const along = new THREE.Vector3(Math.cos(angle) * Math.sin(pitch), Math.cos(pitch), Math.sin(angle) * Math.sin(pitch));
+    leaf.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(across, along, new THREE.Vector3().crossVectors(across, along)));
+    leaf.position.copy(base);
+    const midrib = centerline.map((point) => point.clone().add(new THREE.Vector3(0, 0, 0.004)));
+    leaf.add(redMidrib
+      ? new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(midrib), 12, 0.004, 4, false), veinMaterial)
+      : new THREE.Line(new THREE.BufferGeometry().setFromPoints(midrib), leafVeinMaterial));
+    plant.add(leaf);
   };
   const addStem = (start: THREE.Vector3, end: THREE.Vector3, radius = 0.012, material = stemMaterial) => {
     const direction = new THREE.Vector3().subVectors(end, start);
@@ -260,8 +306,6 @@ export function createPlantModel(
           angle + side * 0.72,
           side * 0.9,
           index % 2 ? foliage : foliageLight,
-          false,
-          true,
           side * Math.cos(angle) * 0.3,
         );
       }
@@ -275,23 +319,23 @@ export function createPlantModel(
     case "aloe": {
       const isSpiky = profile.silhouette === "spiky-rosette";
       const isAloe = profile.silhouette === "aloe";
-      const leafLength = isSpiky ? 0.62 : isAloe ? 0.82 : 0.62;
-      const leafWidth = isSpiky ? 0.095 : isAloe ? 0.16 : 0.16;
-      for (let index = 0; index < count; index += 1) {
-        const angle = index * Math.PI * 2 / count;
-        const ring = index < count * 0.7 ? 0 : 1;
-        const size = ring === 0 ? 1 : 0.62;
-        const lean = (isSpiky ? 0.28 : isAloe ? 0.5 : 0.82) * size;
-        addBlade(
-          Math.cos(angle) * (isSpiky ? 0.11 : isAloe ? 0.14 : 0.1) * size,
-          0.12 + ring * 0.035,
-          Math.sin(angle) * (isSpiky ? 0.11 : isAloe ? 0.14 : 0.1) * size,
-          leafLength * size,
-          leafWidth * size,
+      const style: ArchedLeafOptions & { pitch: number } = isSpiky
+        ? { length: 0.62, width: 0.1, peak: 0.3, pitch: 0.38, bend: 0.35, cup: 0.5 }
+        : isAloe
+          ? { length: 0.82, width: 0.2, peak: 0.22, pitch: 0.8, bend: 0.85, cup: 0.55 }
+          : { length: 0.62, width: 0.2, peak: 0.5, pitch: 1.05, bend: 1, cup: 0.35 };
+      const tiers = [{ size: 1, upright: 1 }, { size: 0.8, upright: 0.7 }, { size: 0.58, upright: 0.4 }];
+      const leafTotal = Math.round(count * 1.8);
+      for (let index = 0; index < leafTotal; index += 1) {
+        const tier = tiers[index % 3];
+        const variation = 0.9 + hashCell(index, 1, 7) * 0.2;
+        const angle = index * 2.399;
+        addArchedLeaf(
+          new THREE.Vector3(Math.cos(angle) * 0.03, 0.1 + (index % 3) * 0.03, Math.sin(angle) * 0.03),
           angle,
-          Math.cos(angle) * lean,
-          index % 2 ? foliageLight : foliage,
-          true,
+          style.pitch * tier.upright + (hashCell(index, 2, 7) - 0.5) * 0.16,
+          { ...style, length: style.length * tier.size * variation, width: style.width * tier.size, bend: style.bend * tier.upright },
+          index % 2 ? archedFoliageLight : archedFoliage,
         );
       }
       break;
@@ -341,14 +385,15 @@ export function createPlantModel(
         const angle = stemIndex * Math.PI * 2 / stemCount;
         const stemEnd = new THREE.Vector3(Math.cos(angle) * 0.18, 0.42 + (stemIndex % 2) * 0.06, Math.sin(angle) * 0.18);
         addStem(new THREE.Vector3(0, 0.04, 0), stemEnd);
-        const leaf = addBlade(stemEnd.x, stemEnd.y + 0.08, stemEnd.z, 0.34, 0.2, angle, Math.cos(angle) * 0.34, stemIndex % 2 ? foliageLight : foliage, true);
-        if (profile.silhouette === "prayer-leaves" && leaf) {
-          const vein = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.006, 0.27, 4), veinMaterial);
-          vein.position.copy(leaf.position).add(new THREE.Vector3(0, -0.02, 0.012));
-          vein.rotation.y = angle;
-          vein.rotation.z = leaf.rotation.z;
-          plant.add(vein);
-        }
+        const leafBase = stemEnd.clone().add(new THREE.Vector3(0, 0.03, 0));
+        addArchedLeaf(
+          leafBase,
+          angle,
+          0.95 + hashCell(stemIndex, 3, 7) * 0.35,
+          { length: 0.4, width: 0.27, peak: 0.42, bend: 0.75, cup: 0.22 },
+          stemIndex % 2 ? archedFoliageLight : archedFoliage,
+          profile.silhouette === "prayer-leaves",
+        );
       }
       break;
     }
@@ -369,8 +414,6 @@ export function createPlantModel(
             leafAngle,
             Math.cos(leafAngle) * 0.3,
             leaf % 2 ? foliage : foliageLight,
-            false,
-            true,
           );
         }
       }
@@ -394,8 +437,6 @@ export function createPlantModel(
             bractAngle,
             Math.cos(bractAngle) * 0.94,
             bract % 2 ? foliageLight : foliage,
-            false,
-            true,
           );
         }
       }
