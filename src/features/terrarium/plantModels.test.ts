@@ -35,7 +35,7 @@ describe("species-specific plant models", () => {
     expect(new Set([fern.scale.y, rosette.scale.y, foliage.scale.y]).size).toBeGreaterThan(1);
   });
 
-  it("builds grass and strap leaves as finite flat ribbons instead of tubes", () => {
+  it("builds grass, strap and nest leaves as finite flat blades instead of tubes", () => {
     const ribbonProfiles = plantCatalog.filter((profile) => ["grass-clump", "arching-straps", "bird-nest"].includes(profile.visual.silhouette));
     expect(ribbonProfiles.length).toBeGreaterThan(0);
     for (const profile of ribbonProfiles) {
