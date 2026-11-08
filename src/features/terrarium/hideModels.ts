@@ -75,8 +75,8 @@ function createCaveShell(surfaceNoise?: THREE.Texture) {
   silhouette.holes.push(entrance);
 
   const geometry = new THREE.ExtrudeGeometry(silhouette, { depth: profile.depth, steps: 5, bevelEnabled: true, bevelSegments: 2, bevelSize: profile.bevel, bevelThickness: profile.bevel, curveSegments: profile.curveSegments });
-  const dark = new THREE.Color(0x5b5145);
-  const light = new THREE.Color(0xa59580);
+  const dark = new THREE.Color(0x433b33);
+  const light = new THREE.Color(0x857868);
   const soil = new THREE.Color(0x5a4631);
   const { halfWidth, shoulderY, topY } = profile.entrance;
   sculpt(geometry, (position, normal, color) => {

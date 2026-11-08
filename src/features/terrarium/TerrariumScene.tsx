@@ -233,7 +233,8 @@ export function TerrariumScene({ shape, dimensions, biotope, substrate, decorati
     const widthHalf = width / 2;
     const depthHalf = depth / 2;
 
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(width, 0.2, depth), groundMaterial);
+    const floorBase = new THREE.MeshStandardMaterial({ color: 0x3b2f27, roughness: 0.9 });
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(width, 0.2, depth), [floorBase, floorBase, groundMaterial, floorBase, floorBase, floorBase]);
     floor.position.y = floorY;
     floor.receiveShadow = true;
     scene.add(floor);
